@@ -13,6 +13,7 @@
 
     Copyright:	CC-BY-2.5 - http://creativecommons.org/licenses/by/2.5/
  **/
+require_once('./NewsieBot_parameters.php');
 
 class bot_config {
     public $bot;
@@ -35,11 +36,11 @@ class bot_config {
     private function set_dbparameters() {
         $r = array(
                 // Define the parameters required for database
-                'engine'	=> "mysql",
-                'dbhost'	=> "localhost",
-                'dbname'	=> "wikinews_sitemgr",
-                'dbuser'	=> "wikinews_sitemgr",
-                'dbpass'	=> "**************"
+                'engine'	=> dB_ENGINE,
+                'dbhost'	=> dB_HOST,
+                'dbname'	=> dB_NAME,
+                'dbuser'	=> dB_USER,
+                'dbpass'	=> dB_PASS
                 );
         $r['PDOflags']		= array(
                     PDO::ATTR_EMULATE_PREPARES => false,
@@ -60,8 +61,9 @@ class bot_config {
         $r['wiki_credentials']	= array(
                     // Define the parameters for the bot's wiki user account
                     // These more-likely to end up in a different class for wiki access
-                    'wikiuser'	=> "NewsieBot",
-                    'wikipass'	=> "***********"
+                    'wikiuser'	=> mW_USER,
+                    'wikipass'	=> mW_PASS,
+                    'wikiURL'   => mW_WIKI
                 );
         return $r;
     }

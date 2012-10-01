@@ -13,7 +13,7 @@
 
     Copyright:	CC-BY-2.5 - http://creativecommons.org/licenses/by/2.5/
  **/
-require_once('./NewsieBot_parameters.php');
+require_once(CLASSPATH.'NewsieBot_parameters.php');
 
 class bot_config {
     public $bot;

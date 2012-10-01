@@ -8,7 +8,7 @@
  *
  **/
 
-require_once('./HTTPcurl.class.php');
+require_once(CLASSPATH.'HTTPcurl.class.php');
 
 /**
  * This is the base class for interacting with a MediaWiki install
@@ -29,7 +29,7 @@ class WikiBot {
      * @param $ht_pass  An optional password for HTTP-Auth (not same as user/pass for wiki login)
      * @return          True/False depending on success.
      **/
-    __construct($wiki_url=self::DEFAULT_wiki, $wiki_api=self::DEFAULT_api, $ht_user=null,$ht_pass=null) {
+    function __construct($wiki_url=self::DEFAULT_wiki, $wiki_api=self::DEFAULT_api, $ht_user=null, $ht_pass=null) {
         $r  = array();
 
         // Create a cURL instance for exclusive use by the bot
@@ -51,18 +51,20 @@ class WikiBot {
 
     /**
      * Configuration function, creates, and returns, the cURL instance
-     * @return      false if fails, otherwise the cURL instance
+     * @return      false if fails, otherwise an array holding
+     *              the cURL instance and the wiki's API URL
      **/
-    private init_cURL( $wiki, $api ) {
+    private function init_cURL( $wiki, $api ) {
         $r  = array();
-        $r['URL']   = $wiki.$api;
         $r['cURL']  = new HTTPcurl();
 
         if ( !$r['cURL'] ) {
             return false;
         }
+        $r['URL']       = $wiki.$api;
         $r['token']     = null;
         $r['timestamp'] = null;
+        $r['cURL']->param['quiet']  = false; // try to make noisy
         return $r;
     }
 
@@ -70,7 +72,7 @@ class WikiBot {
      * Destructor; frees up the bot instance
      * @return      void
      **/
-    __destruct() {
+    function __destruct() {
         unset($this->bot);
     }
 
@@ -83,10 +85,11 @@ class WikiBot {
      **/
     private function query( $query, $postdata = null ) {
         $r  = null;
+        $wURL   = $this->bot['URL'];
         if ($postdata == null ) {
-            $r  = $this->bot['cURL']->http_get(self::bot['URL'].$query);
+            $r  = $this->bot['cURL']->http_get($wURL.$query);
         } else {
-            $r  = $this->bot['cURL']->http_post(self::bot['URL'].$query, $postdata);
+            $r  = $this->bot['cURL']->http_post($wURL.$query, $postdata);
         }
         if (!$r)
             return false;
@@ -115,7 +118,7 @@ class WikiBot {
         // If the username is passed in, then we use what we're given
         if (!$user) {
             // Otherwise, try to retrieve saved credentials
-            if (isset($this->bot['credentials']) {
+            if (isset($this->bot['credentials'])) {
                 $postdata   = $this->bot['credentials'];
             } else {
                 throw new Exception ("Login failed; no credentials supplied");
@@ -131,18 +134,25 @@ class WikiBot {
         }
         // Start trying to log in...
         $r  = $this->query( $q, $postdata );
-        if (isset($r['login']['result'])){
+        if (isset($r['login']['result'])) {
             // Token required in more-recent MediaWiki versions
             if ($r['login']['result'] == 'NeedToken') {
+                echo "Need a token, going to repeat query\n";
+                var_Dump($r);
                 $postdata['lgtoken']    = $r['login']['token'];
+                $postdata['_session']   = $r['login']['sessionid'];
+                var_dump($postdata);
+                echo "Query: $q\n";
+                unset($r);
                 $r  = $this->query( $q, $postdata );
+                var_dump($r);
             }
-        }else {
+        } else {
             throw new Exception ("Login failed; no result returned");
             return false;   // It failed to give a result at-all
         }
         if (isset($r['login']['result'])) {
-            if ($r['login']['result'] != 'Success') {
+            if ($r['login']['result'] !== 'Success') {
                 // The login failed, probably incorrect credentials
                 throw new Exception ("Login failed; returned:".$r['login']['result']);
                 return false;
@@ -173,7 +183,7 @@ class WikiBot {
             return false;
         // Now, stash page fetched and the revision ID.
         $this->bot['pagetitle'] = $page;
-
+var_dump($r);
         return $r['revisions'][0]['*'];
     }
 }

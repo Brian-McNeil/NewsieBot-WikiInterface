@@ -7,15 +7,17 @@
  *
  **/
 
-require_once('./classes/config.class.php');
-require_once('./classes/WikiBot.class.php');
+define('CLASSPATH', '/home/wikinews/NewsieBot/classes/');
+require_once(CLASSPATH.'config.class.php');
+require_once(CLASSPATH.'WikiBot.class.php');
 
-$newsbot    = new WikiBot('https://en.wikinewsie.org');
+$newsiebot    = new WikiBot(mW_WIKI);
 
 if (!$newsiebot) {
     echo "Error initializing wikibot";
 } else {
-    $r = $newsiebot->login(mW_WIKI,mW_PASS);
+    $r = $newsiebot->login(mW_USER,mW_PASS);
+    var_dump($r);
 
     if (!$r)
         die();

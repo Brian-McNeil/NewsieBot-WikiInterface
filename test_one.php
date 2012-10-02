@@ -18,12 +18,17 @@ if (!$newsiebot) {
     echo "Error initializing wikibot";
 } else {
     $r = $newsiebot->login(mW_USER, mW_PASS);
-    var_dump($r);
 
     if (!$r)
         die();
 
-    $page   = $newsiebot->get_page("Main Page");
+    // Although not editing, ask for a token to be retrieved
+    $page   = $newsiebot->get_page("Wikinews:Sandbox", true);
     var_dump($page);
+    echo "\r\nAnd, check a couple of gets\r\n";
+    echo "Edit token:".$newsiebot->token."\r\n";
+    echo "Page title:".$newsiebot->pagetitle."\r\n";
+    echo "Logging out\r\n";
+    $newsiebot->logout();
 }
 ?>

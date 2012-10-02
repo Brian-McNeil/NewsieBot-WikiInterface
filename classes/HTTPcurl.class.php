@@ -47,8 +47,8 @@ class HTTPcurl {
     private function init_public_parameters() {
         $rp = array();
         $rp['jar_id']   = dechex(rand(0, 999999999));
-        $rp['post_followredir'] = 0;
-        $rp['get_followredir']  = 1;
+        $rp['post_followredir'] = false;
+        $rp['get_followredir']  = true;
         $rp['useragent']        = self::$version." User:NewsieBot";
         $rp['quiet']            = true;
         $rp['timeout_connect']  = self::connect_timeout;
@@ -92,7 +92,7 @@ class HTTPcurl {
                 curl_setopt($cURL, CURLOPT_COOKIE, $this->c_date['cookie_string']);
             }
         } catch (Exception $e) {
-            echo 'Error setting cURL parameters\n';
+            echo 'Error setting cURL parameters\r\n';
             return false;
         }
         return true;
@@ -113,10 +113,10 @@ class HTTPcurl {
                 CURLOPT_FOLLOWLOCATION  => $this->param['post_followredir'],
                 CURLOPT_MAXREDIRS       => self::max_redirects,
                 CURLOPT_HTTPHEADER      => array('Expect:'),
-                CURLOPT_RETURNTRANSFER  => 1,
+                CURLOPT_RETURNTRANSFER  => true,
                 CURLOPT_TIMEOUT         => self::response_timeout,
                 CURLOPT_CONNECTTIMEOUT  => self::connect_timeout,
-                CURLOPT_POST            => 1,
+                CURLOPT_POST            => true,
                 CURLOPT_POSTFIELDS      => $data
             );
         $this->set_curl_params( $c_pars );
@@ -132,7 +132,7 @@ class HTTPcurl {
         $c_pars = array(
                 CURLOPT_URL             => $url,
                 CURLOPT_FOLLOWLOCATION  => $this->param['get_followredir'],
-                CURLOPT_HEADER          => 0,
+                CURLOPT_HEADER          => false,
                 CURLOPT_RETURNTRANSFER  => true,
                 CURLOPT_HTTPGET         => true,
                 CURLOPT_USERAGENT       => $this->param['useragent']

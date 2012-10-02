@@ -15,6 +15,9 @@ require_once(CLASSPATH.'HTTPcurl.class.php');
  * @author Brian McNeil
  **/
 class WikiBot {
+    // For safety, should user mangle data for wiki, the test
+    // wiki is set as a default and the path to the API is as-per
+    // the usual default for a 'vanilla' MediaWiki install.
     const DEFAULT_wiki  = 'http://test.wikipedia.org';
     const DEFAULT_api   = '/w/api.php';
     const API_qry       = '?action=query&format=php';
@@ -45,8 +48,39 @@ class WikiBot {
         // edit conflicts.
         $r['revid']     = null;
         $r['pagetitle'] = null;
+        $r['rev_time']  = null;
         $this->bot  = $r;
         return true;
+    }
+
+    /**
+     * A generalised get function which accesses the bot array
+     * @param $var      Variable being sought
+     * @return          The value from the variable, or null
+     **/
+    public function __get( $var ) {
+        // Explicitly block access to the cURL object
+        if ( $var == 'cURL' ) {
+            throw new Exception ("Access to cURL details not permitted");
+            return false;
+        }
+        // Special case - bot username
+        if ( $var == 'user' ) {
+            if (isset($this->bot['credentials']))
+                return $this->bot['credentials']['lgname'];
+        }
+        // No trying anything 'cute'; only accept string
+        if (!is_string($var)) {
+            throw new Exception("Invalid variable access attempt, must be string containing variable name");
+            return false;
+        }
+        // If we've got a relevant variable, return it
+        if (isset($this->bot[$var]))
+            return $this->bot[$var];
+
+        return null;
+
+
     }
 
     /**
@@ -110,6 +144,8 @@ class WikiBot {
 
     /**
      * Wiki login function
+     * @param $user     Username to log in with
+     * @param $pass     Password for the user
      * @return          False if fails, or array of data from the API if succeeds
      **/
     function login( $user = null, $pass = null ) {
@@ -159,25 +195,53 @@ class WikiBot {
     }
 
     /**
+     *  Logout function
+     * @return          Falls out, thus returning null
+     **/
+     function logout() {
+         $this->query( '?action=logout&format=php' );
+     }
+
+     /**
      * General 'page-fetching' function
      * @param $page     The title of the required page
+     * @param $gettoken
      * @param $revid    The revision ID (optional) to be fetched
      * @return          False if fails, or wikitext of desired page
      **/
-    function get_page( $page, $revid = null ) {
-        $q  = '&prop=revisions&titles='.urlencode($page)
-            .'&rvlimit=1&rvprop=content|timestamp';
+    function get_page( $page, $gettoken = false, $revid = null ) {
+        // If asked for an edit token when fetching page, query differs
+        if ($gettoken !== false) {
+            $q  = '&prop=revisions|info&intoken=edit';
+        } else {
+            $q  = '&prop=revisions';
+        }
+        $q      .= '&titles='.urlencode($page).'&rvlimit=1&rvprop=content|timestamp|ids';
 
+        // If asking for specific version, select such
         if ($revid !== null )
             $q  .= '&rvstartid='.$revid;
 
         $r  = $this->query_api( $q );
         if (!$r)
             return false;
-        // Now, stash page fetched and the revision ID.
-        $this->bot['pagetitle'] = $page;
 
-        return $r['revisions'][0]['*'];
+        foreach ($r['query']['pages'] as $t_page) {
+            // Now, stash page fetched and the revision ID.
+            $this->bot['pagetitle'] = $page;
+            $this->bot['rev_time']  = $t_page['revisions'][0]['timestamp'];
+            $this->bot['revid']     = $t_page['revisions'][0]['revid'];
+
+            // Save details of the edit token and the 'edit' start timestamp
+            if ($edit_token !== false ) {
+                $this->bot['token']     = $t_page['edittoken'];
+                $this->bot['timestamp'] = $t_page['starttimestamp'];
+            }
+            // Return the wiki-markup page content
+            return $t_page['revisions'][0]['*'];
+        }
+        // If we hit here, we've not got a page back
+        return false;
     }
 }
 ?>

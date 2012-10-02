@@ -205,7 +205,8 @@ class WikiBot {
      /**
      * General 'page-fetching' function
      * @param $page     The title of the required page
-     * @param $gettoken
+     * @param $gettoken If an edit token is required, also results in the
+     *                  page's timestamp and revid being saved.
      * @param $revid    The revision ID (optional) to be fetched
      * @return          False if fails, or wikitext of desired page
      **/

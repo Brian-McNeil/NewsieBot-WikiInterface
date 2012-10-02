@@ -28,6 +28,7 @@ if (!$newsiebot) {
     echo "\r\nAnd, check a couple of gets\r\n";
     echo "Edit token:".$newsiebot->token."\r\n";
     echo "Page title:".$newsiebot->pagetitle."\r\n";
+    echo "Timestamp:".$newsiebot->timestamp."\r\n";
     echo "Logging out\r\n";
     $newsiebot->logout();
 }

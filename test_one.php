@@ -4,6 +4,7 @@
  *  Author(s):  Brian McNeil ([[n:Brian McNeil]])
  *  Description:
  *      Test framework for bot
+ *      Test one: Log in and retrieve a page
  *
  **/
 
@@ -16,7 +17,7 @@ $newsiebot    = new WikiBot(mW_WIKI);
 if (!$newsiebot) {
     echo "Error initializing wikibot";
 } else {
-    $r = $newsiebot->login(mW_USER,mW_PASS);
+    $r = $newsiebot->login(mW_USER, mW_PASS);
     var_dump($r);
 
     if (!$r)

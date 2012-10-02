@@ -31,6 +31,10 @@ class HTTPcurl {
         } else {
             return false;
         }
+        if ( !$this->set_curl_params() ) {
+            throw new exception("Failed to set normal curl parameters");
+            return false;
+        }
     }
 
     function __destruct() {
@@ -43,8 +47,8 @@ class HTTPcurl {
     private function init_public_parameters() {
         $rp = array();
         $rp['jar_id']   = dechex(rand(0, 999999999));
-        $rp['post_followredir'] = false;
-        $rp['get_followredir']  = true;
+        $rp['post_followredir'] = 0;
+        $rp['get_followredir']  = 1;
         $rp['useragent']        = self::$version." User:NewsieBot";
         $rp['quiet']            = true;
         $rp['timeout_connect']  = self::connect_timeout;
@@ -64,32 +68,28 @@ class HTTPcurl {
         $rc['token_jar']        = array(); // These are 'extra' cookies, such as login tokens
         $rc['cookie_string']    = false;
 
-        if ( !$this->set_curl_params() ) {
-            throw new exception("Failed to set normal curl parameters");
-            return false;
-        }
-
         return $rc;
     }
 
     public function set_curl_params( $parm_arr = null ) {
+        $cURL   = $this->c_data['chan'];
         try {
             if ($parm_arr == null) {
-                curl_setopt($this->c_data['chan'], CURLOPT_COOKIEJAR, $this->param['jar_name']);
-                curl_setopt($this->c_data['chan'], CURLOPT_COOKIEFILE, $this->param['jar_name']);
-                curl_setopt($this->c_data['chan'], CURLOPT_MAXCONNECTS, self::max_connects);
-                curl_setopt($this->c_data['chan'], CURLOPT_MAXREDIRS, self::max_redirects);
-                curl_setopt($this->c_data['chan'], CURLOPT_CLOSEPOLICY, CURLCLOSEPOLICY_LEAST_RECENTLY_USER);
-                curl_setopt($this->c_data['chan'], CURLOPT_CONNECTTIMEOUT, $this->param['timeout_connect']);
-                curl_setopt($this->c_data['chan'], CURLOPT_TIMEOUT, $this->param['timeout_response']);
-                curl_setopt($this->c_data['chan'], CURLOPT_USERAGENT, $this->param['useragent']);
+                curl_setopt($cURL, CURLOPT_COOKIEJAR, $this->param['jar_name']);
+                curl_setopt($cURL, CURLOPT_COOKIEFILE, $this->param['jar_name']);
+                curl_setopt($cURL, CURLOPT_MAXCONNECTS, self::max_connects);
+                curl_setopt($cURL, CURLOPT_MAXREDIRS, self::max_redirects);
+                curl_setopt($cURL, CURLOPT_CLOSEPOLICY, CURLCLOSEPOLICY_LEAST_RECENTLY_USER);
+                curl_setopt($cURL, CURLOPT_CONNECTTIMEOUT, $this->param['timeout_connect']);
+                curl_setopt($cURL, CURLOPT_TIMEOUT, $this->param['timeout_response']);
+                curl_setopt($cURL, CURLOPT_USERAGENT, $this->param['useragent']);
             } else {
                 foreach ( $parm_arr as $opt => $val ) {
-                    curl_setopt($this->c_data['chan'], $opt, $val);
+                    curl_setopt($cURL, $opt, $val);
                 }
             }
             if (!$this->c_data['cookie_string'] ) {
-                curl_setopt($this->c_data['chan'], CURLOPT_COOKIE, $this->c_date['cookie_string']);
+                curl_setopt($cURL, CURLOPT_COOKIE, $this->c_date['cookie_string']);
             }
         } catch (Exception $e) {
             echo 'Error setting cURL parameters\n';
@@ -109,19 +109,22 @@ class HTTPcurl {
         $stime = microtime(1);
         $c_pars = array(
                 CURLOPT_URL             => $url,
+                CURLOPT_USERAGENT       => $this->param['useragent'],
                 CURLOPT_FOLLOWLOCATION  => $this->param['post_followredir'],
+                CURLOPT_MAXREDIRS       => self::max_redirects,
                 CURLOPT_HTTPHEADER      => array('Expect:'),
-                CURLOPT_RETURNTRANSFER  => true,
-                CURLOPT_POST            => true,
-                CURLOPT_POSTFIELDS      => $data,
-                CURLOPT_USERAGENT       => $this->param['useragent']
+                CURLOPT_RETURNTRANSFER  => 1,
+                CURLOPT_TIMEOUT         => self::response_timeout,
+                CURLOPT_CONNECTTIMEOUT  => self::connect_timeout,
+                CURLOPT_POST            => 1,
+                CURLOPT_POSTFIELDS      => $data
             );
         $this->set_curl_params( $c_pars );
-        $r_data     = curl_exec($this->c_data['chan']);
+        $data     = curl_exec($this->c_data['chan']);
 
         if (!$this->param['quiet'] )
             echo "POST: $url (".(microtime(1) - $stime)." sec) ".strlen($data)." bytes\r\n";
-        return $r_data;
+        return $data;
     }
 
     public function http_get($url) {

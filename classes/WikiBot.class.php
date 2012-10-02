@@ -116,7 +116,14 @@ class WikiBot {
         $q          = '?action=login&format=php';
 
         // If the username is passed in, then we use what we're given
-        if (!$user) {
+        if ($user !== null) {
+            // Save the credentials we got before trying to use them
+            $postdata   = array(
+                        'lgname'        => $user,
+                        'lgpassword'    => $pass
+                        );
+            $this->bot['credentials']   = $postdata;
+        } else {
             // Otherwise, try to retrieve saved credentials
             if (isset($this->bot['credentials'])) {
                 $postdata   = $this->bot['credentials'];
@@ -124,28 +131,14 @@ class WikiBot {
                 throw new Exception ("Login failed; no credentials supplied");
                 return false;   // Fail, don't have any saved credentials
             }
-        } else {
-            // Save the credentials we got before trying to use them
-            $postdata   = array(
-                        'lgname'        => $user,
-                        'lgpassword'    => $pass
-                        );
-            $this->bot['credentials']   = $postdata;
         }
         // Start trying to log in...
         $r  = $this->query( $q, $postdata );
         if (isset($r['login']['result'])) {
             // Token required in more-recent MediaWiki versions
             if ($r['login']['result'] == 'NeedToken') {
-                echo "Need a token, going to repeat query\n";
-                var_Dump($r);
                 $postdata['lgtoken']    = $r['login']['token'];
-                $postdata['_session']   = $r['login']['sessionid'];
-                var_dump($postdata);
-                echo "Query: $q\n";
-                unset($r);
                 $r  = $this->query( $q, $postdata );
-                var_dump($r);
             }
         } else {
             throw new Exception ("Login failed; no result returned");
@@ -183,7 +176,7 @@ class WikiBot {
             return false;
         // Now, stash page fetched and the revision ID.
         $this->bot['pagetitle'] = $page;
-var_dump($r);
+
         return $r['revisions'][0]['*'];
     }
 }

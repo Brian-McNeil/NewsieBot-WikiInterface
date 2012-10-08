@@ -215,6 +215,7 @@ class HTTPcurl {
             }
         }
         $this->c_data['cookie_string']  = $cookies_str;
+        return true;
     }
 }
 ?>

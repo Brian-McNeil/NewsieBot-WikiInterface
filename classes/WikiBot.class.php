@@ -49,6 +49,8 @@ class WikiBot {
         $r['revid']     = null;
         $r['pagetitle'] = null;
         $r['rev_time']  = null;
+        $r['error']     = null;
+        $r['errcode']   = null;
         $this->bot  = $r;
         return true;
     }
@@ -61,7 +63,8 @@ class WikiBot {
     public function __get( $var ) {
         // Explicitly block access to the cURL object
         if ( $var == 'cURL' ) {
-            throw new Exception ("Access to cURL details not permitted");
+            $this->bot['error']     = "Access to cURL details not permitted";
+            $this->bot['errcode']   = 'fatal';
             return false;
         }
         // Special case - bot username
@@ -71,7 +74,8 @@ class WikiBot {
         }
         // No trying anything 'cute'; only accept string
         if (!is_string($var)) {
-            throw new Exception("Invalid variable access attempt, must be string containing variable name");
+            $this->bot['error']     = "Invalid variable access attempt, must be string containing variable name";
+            $this->bot['errcode']   = 'warn';
             return false;
         }
         // If we've got a relevant variable, return it
@@ -119,14 +123,17 @@ class WikiBot {
      **/
     private function query( $query, $postdata = null ) {
         $r  = null;
-        $wURL   = $this->bot['URL'];
+        $wURL   = $this->URL;
         if ($postdata == null ) {
             $r  = $this->bot['cURL']->http_get($wURL.$query);
         } else {
             $r  = $this->bot['cURL']->http_post($wURL.$query, $postdata);
         }
-        if (!$r)
+        if (!$r) {
+            $this->bot['error']     = "Error with cURL library";
+            $this->bot['errcode']   = 'fatal';
             return false;
+        }
         return unserialize($r);
     }
 
@@ -164,7 +171,8 @@ class WikiBot {
             if (isset($this->bot['credentials'])) {
                 $postdata   = $this->bot['credentials'];
             } else {
-                throw new Exception ("Login failed; no credentials supplied");
+                $this->bot['error']     = "Login failed; no credentials supplied";
+                $this->bot['errcode']   = 'fatal';
                 return false;   // Fail, don't have any saved credentials
             }
         }
@@ -177,19 +185,22 @@ class WikiBot {
                 $r  = $this->query( $q, $postdata );
             }
         } else {
-            throw new Exception ("Login failed; no result returned");
+            $this->bot['error']     = "Login failed; no result returned";
+            $this->bot['errcode']   = 'fatal';
             return false;   // It failed to give a result at-all
         }
         if (isset($r['login']['result'])) {
             if ($r['login']['result'] !== 'Success') {
                 // The login failed, probably incorrect credentials
-                throw new Exception ("Login failed; returned:".$r['login']['result']);
+                $this->bot['error']     = "Login failed; returned:".$r['login']['result'];
+                $this->bot['errcode']   = 'fatal';
                 return false;
             } else {
                 return $r;
             }
         } else {
-                throw new Exception ("Login failed; no result returned");
+                $this->bot['error']     = "Login failed; no result returned";
+                $this->bot['errcode']   = 'fatal';
                 return false;   // Again, didn't get returned a result.
         }
     }
@@ -224,8 +235,11 @@ class WikiBot {
             $q  .= '&rvstartid='.$revid;
 
         $r  = $this->query_api( $q );
-        if (!$r)
+        if (!$r) {
+            $this->bot['error']     = "No data returned by MediaWiki API";
+            $this->bot['errcode']   = 'fatal';
             return false;
+        }
 
         foreach ($r['query']['pages'] as $t_page) {
             // Now, stash page fetched and the revision ID.
@@ -242,7 +256,87 @@ class WikiBot {
             return $t_page['revisions'][0]['*'];
         }
         // If we hit here, we've not got a page back
+        $this->bot['error']     = "Unknown error fetching wiki page";
+        $this->bot['errcode']   = 'warning';
         return false;
+    }
+
+    /**
+     * 'Swiss-Army Knife' page write function.
+     * This function will handle all page write permutations, and generally be
+     * called from other functions which handle adding a new section, updating an
+     * existing section, or preventing overwrite of existing pages.
+     * @param $title    Title of page being accessed/written
+     * @param $content  Content of page, or section, to write
+     * @param $summary  Edit summary, or new section name
+     * @param $bot      Default true, defines if a bot edit
+     * @param $minor    Default false, defines if a minor edit
+     * @param $new      Optional; if not specified, will write page regardless
+     *                  If true, must be a new page being written; if false
+     *                  must *not* be a new page being written.
+     * @param $sec_num  Optional; the section number being edited/written.
+     * @param $sec_new  Default false; if set to true, must be a new page section
+     *                  being added
+     * @param $ign_conf Default false; ignore edit conflicts
+     * @param $r_time   This is only required where handling edit conflicts *and*
+     *                  the page being written was not the last page retrieved. When
+     *                  this is the case, the timestamp from the page retrieved must
+     *                  be provided to allow the API to detect edit conflicts.
+     * @return          False if fails, otherwise the data returned by the API.
+     **/
+    function write_page( $title, $content, $summary = null, $bot = true, $minor = false,
+                        $new = null, $sec_num = null, $sec_new = false,
+                        $ign_conf = false, $r_time = null) {
+        $q      = '?action=edit&format=php';
+        $post   = array(
+                'title'                 => $title,
+                'summary'               => $summary,
+                ($bot?'bot':'notbot')   => true,
+                ($minor?'minor':'notminor') => true
+                );
+        // Grab timestamp, even if not going to use it later.
+        $e_timestamp    = $this->rev_time;
+        if ( $r_time !== null ) {
+            $e_timestamp    = $r_time;
+        } elseif ( $new !== true) {
+            // Null timestamp, must be editing last-page retrieved if $new not true
+            if ( $this->pagetitle !== $title ) {
+                $this->bot['error']     = "Cannot update a page that not previously retrieved\r\n" ;
+                $this->bot['errcode']   = 'warning';
+                return false;
+            }
+        }
+
+        if ( $new == true ) {
+            $post['createonly'] = true;
+        } elseif ( $new == false ) {
+            $post['nocreate']   = true;
+        }
+
+        // Handle writing new section, or updating a section
+        if ( $sec_new == true ) {
+            $post['section']        = 'new';
+            $post['sectiontitle']   = $summary;
+        } elseif ( $sec_num ) {
+            $post['section']    = $sec_num;
+        }
+        if ( $ign_conf == true ) {
+            $post['recreate']   = true;
+        } else {
+            $post['basetimestamp']  = $e_timestamp;
+//            $post['starttimestamp'] = $this->timestamp;
+        }
+
+        $post['text']   = $content;
+        $post['token']  = $this->token;
+
+        $result = $this->query( $q, $post );
+        if ( isset($result['error']) ) {
+            $this->bot['error']     = $result['error']['info'];
+            $this->bot['errcode']   = $result['error']['code'];
+            return false;
+        }
+        return $result;
     }
 }
 ?>

@@ -21,7 +21,7 @@ if (!$newsiebot) {
     echo "Error initializing wikibot";
 } else {
     $r = $newsiebot->login(mW_USER, mW_PASS);
-
+    $newsiebot->quiet = false;
     if (!$r)
         die();
 
@@ -49,8 +49,13 @@ if (!$newsiebot) {
     $r  = $newsiebot->write_page( $pg, $newpage,
         "Force conflict", false, true, null, null, false, false,
         $old_timestamp);
-    echo "Returned:\r\n";
-    var_dump($r);
+
+    if ( $r == false ) {
+        echo "Error editing page\r\n    Msg: ".$newsiebot->error." Severity: ".$newsiebot->errcode."\r\n";
+    } else {
+        echo "Returned:\r\n";
+        var_dump($r);
+    }
 
     echo "Logging out\r\n";
     $newsiebot->logout();

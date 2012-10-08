@@ -30,9 +30,10 @@ class WikiBot {
      * @param $wiki_api Optional path to the wiki's api.php. Defaults to standard for WMF installs
      * @param $ht_user  An optional username if HTTP-Auth is in-use
      * @param $ht_pass  An optional password for HTTP-Auth (not same as user/pass for wiki login)
+     * @param $quiet    Default true; optional parameter to make the class output tracing comments/messages
      * @return          True/False depending on success.
      **/
-    function __construct($wiki_url=self::DEFAULT_wiki, $wiki_api=self::DEFAULT_api, $ht_user=null, $ht_pass=null) {
+    function __construct($wiki_url=self::DEFAULT_wiki, $wiki_api=self::DEFAULT_api, $ht_user=null, $ht_pass=null, $quiet=true ) {
         $r  = array();
 
         // Create a cURL instance for exclusive use by the bot
@@ -51,6 +52,7 @@ class WikiBot {
         $r['rev_time']  = null;
         $r['error']     = null;
         $r['errcode']   = null;
+        $r['quiet']     = $quiet;
         $this->bot  = $r;
         return true;
     }
@@ -75,7 +77,7 @@ class WikiBot {
         // No trying anything 'cute'; only accept string
         if (!is_string($var)) {
             $this->bot['error']     = "Invalid variable access attempt, must be string containing variable name";
-            $this->bot['errcode']   = 'warn';
+            $this->bot['errcode']   = 'warning';
             return false;
         }
         // If we've got a relevant variable, return it
@@ -83,9 +85,31 @@ class WikiBot {
             return $this->bot[$var];
 
         return null;
-
-
     }
+
+    /**
+     * A limited-scope 'set' function.
+     * @param $var      'bot' variable to set
+     * @param $value    Value to assign to variable
+     * @return          True if successful, false if fails
+     **/
+     public function __set( $var, $value ) {
+         if ( $this->quiet == false )   echo "Request to set variable: $var\r\n";
+         if ( $var == 'cURL' || $var == 'credentials' ) {
+             $this->error   = "Setting protected variable outside object creation not permitted.";
+             $this->errcode = 'fail';
+             return false;
+         }
+         if ( isset($this->bot[$var]) ) {
+             $this->bot[$var]   = $value;
+             return true;
+         } else {
+             $this->error   = "Request to set undefined object variable for WikiBot class.";
+             $this->errcode = 'warning';
+             return false;
+         }
+
+     }
 
     /**
      * Configuration function, creates, and returns, the cURL instance
@@ -122,11 +146,14 @@ class WikiBot {
      * @return          False if fails, or unserialized result data
      **/
     private function query( $query, $postdata = null ) {
+        if ( $this->quiet == false )    echo "Doing query: $q\r\n";
         $r  = null;
         $wURL   = $this->URL;
         if ($postdata == null ) {
+            if ( $this->quiet == false )    echo "    Request type: GET\r\n";
             $r  = $this->bot['cURL']->http_get($wURL.$query);
         } else {
+            if ( $this->quiet == false )    echo "    Request type: POST\r\n";
             $r  = $this->bot['cURL']->http_post($wURL.$query, $postdata);
         }
         if (!$r) {
@@ -144,6 +171,7 @@ class WikiBot {
      * @return          False if fails, or unserialized result data
      **/
     function query_api( $query, $postdata = null ) {
+        if ( $this->quiet == false )    echo "API query of:$query\r\n";
 
         $q  = self::API_qry.$query;
         return $this->query($q, $postdata);
@@ -156,6 +184,7 @@ class WikiBot {
      * @return          False if fails, or array of data from the API if succeeds
      **/
     function login( $user = null, $pass = null ) {
+        if ( $this->quiet == false )    echo "Logging in, user:$user\r\n";
         $q          = '?action=login&format=php';
 
         // If the username is passed in, then we use what we're given
@@ -167,6 +196,7 @@ class WikiBot {
                         );
             $this->bot['credentials']   = $postdata;
         } else {
+            if ( $this->quiet == false )    echo "    Trying to retrieve saved credentials\r\n";
             // Otherwise, try to retrieve saved credentials
             if (isset($this->bot['credentials'])) {
                 $postdata   = $this->bot['credentials'];
@@ -210,6 +240,7 @@ class WikiBot {
      * @return          Falls out, thus returning null
      **/
      function logout() {
+         if ( $this->quiet == false )    echo "Logging out\r\n";
          $this->query( '?action=logout&format=php' );
      }
 
@@ -222,8 +253,10 @@ class WikiBot {
      * @return          False if fails, or wikitext of desired page
      **/
     function get_page( $page, $gettoken = false, $revid = null ) {
+        if ( $this->quiet == false )    echo "Fetching page:$page\r\n";
         // If asked for an edit token when fetching page, query differs
         if ($gettoken !== false) {
+            if ( $this->quiet == false )    echo "    Asking edit token\r\n";
             $q  = '&prop=revisions|info&intoken=edit';
         } else {
             $q  = '&prop=revisions';
@@ -248,7 +281,7 @@ class WikiBot {
             $this->bot['revid']     = $t_page['revisions'][0]['revid'];
 
             // Save details of the edit token and the 'edit' start timestamp
-            if ($edit_token !== false ) {
+            if ($get_token !== false ) {
                 $this->bot['token']     = $t_page['edittoken'];
                 $this->bot['timestamp'] = $t_page['starttimestamp'];
             }
@@ -287,6 +320,7 @@ class WikiBot {
     function write_page( $title, $content, $summary = null, $bot = true, $minor = false,
                         $new = null, $sec_num = null, $sec_new = false,
                         $ign_conf = false, $r_time = null) {
+        if ( $this->quiet == false )    echo "Writing to page:$title\r\n";
         $q      = '?action=edit&format=php';
         $post   = array(
                 'title'                 => $title,
@@ -308,21 +342,27 @@ class WikiBot {
         }
 
         if ( $new == true ) {
+            if ( $this->quiet == false )    echo "    Will only create if not exists\r\n";
             $post['createonly'] = true;
         } elseif ( $new == false ) {
+            if ( $this->quiet == false )    echo "    Will not create if does not exist\r\n";
             $post['nocreate']   = true;
         }
 
         // Handle writing new section, or updating a section
         if ( $sec_new == true ) {
+            if ( $this->quiet == false )    echo "    Adding new section\r\n";
             $post['section']        = 'new';
             $post['sectiontitle']   = $summary;
         } elseif ( $sec_num ) {
+            if ( $this->quiet == false )    echo "    Updating section:$sec_num\r\n";
             $post['section']    = $sec_num;
         }
         if ( $ign_conf == true ) {
+            if ( $this->quiet == false )    echo "    Overwriting regardless\r\n";
             $post['recreate']   = true;
         } else {
+            if ( $this->quiet == false )    echo "    Try to catch edit conflicts\r\n";
             $post['basetimestamp']  = $e_timestamp;
 //            $post['starttimestamp'] = $this->timestamp;
         }

@@ -43,15 +43,24 @@ class WikiBot {
         }
         // If HTTP-Auth used, store those details
         if ($ht_user !== null) {
-            $r['cURL']->HTTP_auth( $ht_user, $ht_pass);
+            $r['cURL']->HTTP_auth( $ht_user, $ht_pass );
         }
         // Revision ID/Page will be tracked to allow bots to detect
         // edit conflicts.
         $r['revid']     = null;
         $r['pagetitle'] = null;
         $r['rev_time']  = null;
+        // Thow around some error stuff
         $r['error']     = null;
         $r['errcode']   = null;
+        // Default behaviours - These reset on every page write!
+        $r['bot']               = true; // We're a bot
+        $r['minor']             = false; // We don't make minor edits
+        $r['conflict']          = true; // Respect edit conflicts
+        $r['newpage']           = false; // Not writing new page unless say so
+        $r['readtime']          = 0; // Set this to time page retrieved if not
+                                     // writing most-recently-read page.
+        // Keep quiet unless told otherwise
         $r['quiet']     = $quiet;
         $this->bot  = $r;
         return true;
@@ -94,13 +103,15 @@ class WikiBot {
      * @return          True if successful, false if fails
      **/
      public function __set( $var, $value ) {
-         if ( $this->quiet == false )   echo "Request to set variable: $var\r\n";
+         if ( $this->quiet == false )
+             echo "Request to set variable: $var to '$value'\r\n";
          if ( $var == 'cURL' || $var == 'credentials' ) {
              $this->error   = "Setting protected variable outside object creation not permitted.";
              $this->errcode = 'fail';
              return false;
          }
-         if ( isset($this->bot[$var]) ) {
+
+         if ( isset( $this->bot[$var] ) ) {
              $this->bot[$var]   = $value;
              return true;
          } else {
@@ -295,44 +306,34 @@ class WikiBot {
     }
 
     /**
-     * 'Swiss-Army Knife' page write function.
-     * This function will handle all page write permutations, and generally be
-     * called from other functions which handle adding a new section, updating an
-     * existing section, or preventing overwrite of existing pages.
+     * Page write function.
+     *  This function will handle most page write permutations; certain options can be
+     *  'tweaked' by setting extra variables (eg: $bot->conflict = false to ignore edit conflicts)
+     *  Those variable options are reset to: mark edits as bot, not minor, respect edit conflicts,
+     *      not writing new pages. It is also assumed (unless specified in $bot->readtime) that
+     *      the page being written was the last read. If not, $bot->readtime must contain the
+     *      timestamp of the retrieved revision.
      * @param $title    Title of page being accessed/written
      * @param $content  Content of page, or section, to write
      * @param $summary  Edit summary, or new section name
-     * @param $bot      Default true, defines if a bot edit
-     * @param $minor    Default false, defines if a minor edit
-     * @param $new      Optional; if not specified, will write page regardless
-     *                  If true, must be a new page being written; if false
-     *                  must *not* be a new page being written.
-     * @param $sec_num  Optional; the section number being edited/written.
-     * @param $sec_new  Default false; if set to true, must be a new page section
-     *                  being added
-     * @param $ign_conf Default false; ignore edit conflicts
-     * @param $r_time   This is only required where handling edit conflicts *and*
-     *                  the page being written was not the last page retrieved. When
-     *                  this is the case, the timestamp from the page retrieved must
-     *                  be provided to allow the API to detect edit conflicts.
+     * @param $section  A numeric string for section number to edit or 'new' to append new
      * @return          False if fails, otherwise the data returned by the API.
      **/
-    function write_page( $title, $content, $summary = null, $bot = true, $minor = false,
-                        $new = null, $sec_num = null, $sec_new = false,
-                        $ign_conf = false, $r_time = null) {
-        if ( $this->quiet == false )    echo "Writing to page:$title\r\n";
+    function write_page( $title, $content, $summary = null, $section = null ) {
+        if ( $this->quiet == false )    echo "Writing to page:$title \r\n";
         $q      = '?action=edit&format=php';
         $post   = array(
-                'title'                 => $title,
-                'summary'               => $summary,
-                ($bot?'bot':'notbot')   => true,
-                ($minor?'minor':'notminor') => true
+                'title'                             => $title,
+                'summary'                           => $summary,
+                ($this->bot?'bot':'notbot')         => true,
+                ($this->minor?'minor':'notminor')   => true
                 );
+
         // Grab timestamp, even if not going to use it later.
         $e_timestamp    = $this->rev_time;
-        if ( $r_time !== null ) {
+        if ( $this->readtime !== 0 ) {
             $e_timestamp    = $r_time;
-        } elseif ( $new !== true) {
+        } elseif ( !$this->newpage ) {
             // Null timestamp, must be editing last-page retrieved if $new not true
             if ( $this->pagetitle !== $title ) {
                 $this->bot['error']     = "Cannot update a page that not previously retrieved\r\n" ;
@@ -341,36 +342,34 @@ class WikiBot {
             }
         }
 
-        if ( $new == true ) {
-            if ( $this->quiet == false )    echo "    Will only create if not exists\r\n";
-            $post['createonly'] = true;
-        } elseif ( $new == false ) {
-            if ( $this->quiet == false )    echo "    Will not create if does not exist\r\n";
-            $post['nocreate']   = true;
+        if ( $this->conflict ) {
+            $post['basetimestamp']  = $e_timestamp; // Try catch edit conflicts
+        } else {
+            $post['recreate']   = true;             // Or overwrite anything
         }
 
         // Handle writing new section, or updating a section
-        if ( $sec_new == true ) {
-            if ( $this->quiet == false )    echo "    Adding new section\r\n";
-            $post['section']        = 'new';
+        if ( $section !== null ) {
+            if ( $section == 'new' ) { // Appending a new section
+                $post['section']        = 'new';
+            } else {
+                $post['section']        = $section; // This assumes the variable holds a string integer
+            }
             $post['sectiontitle']   = $summary;
-        } elseif ( $sec_num ) {
-            if ( $this->quiet == false )    echo "    Updating section:$sec_num\r\n";
-            $post['section']    = $sec_num;
-        }
-        if ( $ign_conf == true ) {
-            if ( $this->quiet == false )    echo "    Overwriting regardless\r\n";
-            $post['recreate']   = true;
-        } else {
-            if ( $this->quiet == false )    echo "    Try to catch edit conflicts\r\n";
-            $post['basetimestamp']  = $e_timestamp;
-//            $post['starttimestamp'] = $this->timestamp;
         }
 
         $post['text']   = $content;
         $post['token']  = $this->token;
 
-        $result = $this->query( $q, $post );
+        // Default behaviours - These reset on every page write!
+        $this->bot['bot']       = true; // We're a bot
+        $this->bot['minor']     = false; // We don't make minor edits
+        $this->bot['conflict']  = true; // Respect edit conflicts
+        $this->bot['newpage']   = false; // Not writing new page unless say so
+        $this->bot['readtime']  = 0; // Set this to time page retrieved if not
+                                        // writing most-recently-read page.
+
+                                        $result = $this->query( $q, $post );
         if ( isset($result['error']) ) {
             $this->bot['error']     = $result['error']['info'];
             $this->bot['errcode']   = $result['error']['code'];

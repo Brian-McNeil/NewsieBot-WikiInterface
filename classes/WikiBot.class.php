@@ -1,11 +1,18 @@
 <?php
 /**
  *  Title:      WikiBot.class.php
- *  Author(s):  Brian McNeil [[n:Brian McNeil]]
+ *  Author(s):  Brian McNeil ([[n:Brian McNeil]])
+ *  Version:    0.0.3-0
+ *  Date:       October 13, 2012
  *  Description:
- *      Class(es) to handle bot interactions with MediaWiki
+ *      Basic class for interaction with MediaWiki. Handles login/out,
+ *      fetching pages, and writing pages.
  *
+ *      Copyright: CC-BY-2.5 (See Creative Commons website for full terms)
  *
+ *  History
+ *      0.0.3-0    2012-10-13   Brian McNeil
+ *                              Document now at most-basic functions.
  **/
 
 require_once(CLASSPATH.'HTTPcurl.class.php');
@@ -21,6 +28,7 @@ class WikiBot {
     const DEFAULT_wiki  = 'http://test.wikipedia.org';
     const DEFAULT_api   = '/w/api.php';
     const API_qry       = '?action=query&format=php';
+    const API_parse     = '?action=parse&format=php';
 
     private $bot;
 
@@ -157,7 +165,7 @@ class WikiBot {
      * @return          False if fails, or unserialized result data
      **/
     private function query( $query, $postdata = null ) {
-        if ( $this->quiet == false )    echo "Doing query: $q\r\n";
+        if ( $this->quiet == false )    echo "Doing query: $q \r\n";
         $r  = null;
         $wURL   = $this->URL;
         if ($postdata == null ) {
@@ -175,6 +183,24 @@ class WikiBot {
         return unserialize($r);
     }
 
+    private function content( $query, $postdata = null ) {
+        if ( $this->quiet == false )    echo "Doing content retrieval: $query \r\n";
+        $r  = null;
+        $wURL   = $this->URL;
+        if ($postdata == null ) {
+            if ( $this->quiet == false )    echo "    Request type: GET\r\n";
+            $r  = $this->bot['cURL']->http_get($wURL.$query);
+        } else {
+            if ( $this->quiet == false )    echo "    Request type: POST\r\n";
+            $r  = $this->bot['cURL']->http_post($wURL.$query, $postdata);
+        }
+        if (!$r) {
+            $this->bot['error']     = "Error with cURL library";
+            $this->bot['errcode']   = 'fatal';
+            return false;
+        }
+        return unserialize($r);
+    }
     /**
      * API query function; sends a query to the target MediaWiki using the API
      * @param $query    Passed-in query string (eg '&prop=revisions&title=Foo')
@@ -182,9 +208,16 @@ class WikiBot {
      * @return          False if fails, or unserialized result data
      **/
     function query_api( $query, $postdata = null ) {
-        if ( $this->quiet == false )    echo "API query of:$query\r\n";
+        if ( $this->quiet == false )    echo "API query of: $query \r\n";
 
         $q  = self::API_qry.$query;
+        return $this->query($q, $postdata);
+    }
+
+    function query_content( $query, $postdata = null ) {
+        if ( $this->quiet == false )    echo "Content request of: $query \r\n";
+
+        $q  = self::API_parse.$query;
         return $this->query($q, $postdata);
     }
 
@@ -195,7 +228,7 @@ class WikiBot {
      * @return          False if fails, or array of data from the API if succeeds
      **/
     function login( $user = null, $pass = null ) {
-        if ( $this->quiet == false )    echo "Logging in, user:$user\r\n";
+        if ( $this->quiet == false )    echo "Logging in, user: $user \r\n";
         $q          = '?action=login&format=php';
 
         // If the username is passed in, then we use what we're given
@@ -264,9 +297,9 @@ class WikiBot {
      * @return          False if fails, or wikitext of desired page
      **/
     function get_page( $page, $gettoken = false, $revid = null ) {
-        if ( $this->quiet == false )    echo "Fetching page:$page\r\n";
+        if ( $this->quiet == false )    echo "Fetching page: $page \r\n";
         // If asked for an edit token when fetching page, query differs
-        if ($gettoken !== false) {
+        if ( $gettoken ) {
             if ( $this->quiet == false )    echo "    Asking edit token\r\n";
             $q  = '&prop=revisions|info&intoken=edit';
         } else {
@@ -376,6 +409,55 @@ class WikiBot {
             return false;
         }
         return $result;
+    }
+
+    /**
+     * Function to retrieve a page's table of contents (index)
+     * @param $page     The title of the required page
+     * @param $revid    Optional, the revision ID to fetch the TOC of
+     * @return          False if fails, or the TOC in an array.
+     *                  Note failure only if no page.
+     **/
+    function get_toc( $page, $revid = null ) {
+        $toc    = array();
+        $toc[] = array(
+            'index'     => '0',
+            'heading'   => '',
+            'level'     => '0',
+            'page'      => $page,
+            'number'    => '0'
+            );
+        if ( $this->quiet == false )    echo "Fetching TOC for: $page \r\n";
+
+        $q  = '&prop=sections&page='.urlencode($page);
+        if ( $revid !== null )
+            $q  .= '&rvstartid='.$revid;
+
+        $r  = $this->query_content( $q );
+        if ( isset($r['error']) ) { // Error getting any page data
+            $this->bot['error']     = $r['error']['string'];
+            $this->bot['errcode']   = 'error';
+            return false;
+        }
+        $toc_elem   = $r['parse']['sections'];
+
+        if ( empty($toc_elem) ) { // Empty, does that mean page doesn't exist?
+            if ( $this->get_page( $page ) == false) {
+                $this->bot['error']     = "Requested TOC for nonexistent page";
+                $this->bot['errcode']   = 'warning';
+                return false;
+            }
+        }
+        foreach ($toc_elem as $line ) {
+            $toc[]  = array(
+                'index'     => $line['index'],
+                'heading'   => $line['line'],
+                'level'     => $line['level'],
+                'page'      => $line['fromtitle'],
+                'number'    => $line['number']
+                );
+        }
+        return $toc;
     }
 }
 ?>

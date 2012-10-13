@@ -1,21 +1,31 @@
 <?php
 /**
- *      HTTPcurl.classes.php
+ *  Title:      HTTPcurl.classes.php
+ *  Author(s):  Brian McNeil ([[n:Brian McNeil]])
+ *  Version:    0.1.0-0
+ *  Date:       October 13, 2012
+ *  Description:
+ *      cURL wrapper class
  *
- *      Class for using Curl with cookie storage and simplified access to
- *      POST or GET page content.
+ *      Copyright: CC-BY-2.5 (See Creative Commons website for full terms)
+ *
+ *  History
+ *      0.1.0-0    2012-10-13   Brian McNeil
+ *                              Create: Class to use as a wrapper for cURL
+ *                              with the MediaWiki API.
  **/
 
 // Need a temporary dir; could be local, or sys-wide.
+// A user-local directory may-well be preferable for improved security.
 if ( !defined('curlTMPstor') ) {
     define( "curlTMPstor", '/tmp/' );
 }
 
 class HTTPcurl {
 
-    static $version             = "HTTPcurl.class v0.1";
+    static $version             = "HTTPcurl.class v0.1.0-0";
     const   connect_timeout     = 10;
-    const   response_timeout    = 60;
+    const   response_timeout    = 60; // This will need bumped up a great deal if uploading large files
     const   max_connects        = 100;
     const   max_redirects       = 10;
 
@@ -40,7 +50,7 @@ class HTTPcurl {
             return false;
         }
         if ( !$this->set_curl_params() ) {
-            throw new exception("Failed to set normal curl parameters");
+            throw new exception("Failed to set normal cURL parameters");
             return false;
         }
         return true;
@@ -84,11 +94,11 @@ class HTTPcurl {
         $rc = array();
         $rc['chan']  = curl_init();
         if ( $rc['chan'] == false ) {
-            throw new exception("Failed to initialise curl for access to web");
+            throw new exception("Failed to initialise cURL for access to web");
             return false;
         }
         $rc['token_jar']        = array(); // These are 'extra' cookies, such as login tokens
-        $rc['cookie_string']    = false;
+        $rc['cookie_string']    = false; // Also keep a 'simple' string rather than repeatedly rebuild
 
         return $rc;
     }

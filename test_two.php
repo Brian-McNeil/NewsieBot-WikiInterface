@@ -20,6 +20,8 @@ $pg         = "Wikinews:Sandbox";
 if (!$newsiebot) {
     echo "Error initializing wikibot";
 } else {
+    $toke   = $newsiebot->get_page("Special:UserLogin", true );
+    var_dump($toke);
     $r = $newsiebot->login(mW_USER, mW_PASS);
     $newsiebot->quiet = false;
     if (!$r)
@@ -36,17 +38,17 @@ if (!$newsiebot) {
 
     $newpage    = $page."\r\nAdding some text to the test page";
 
-    $r  = $newsiebot->write_page( $pg, $newpage, "A test edit" );
+//    $r  = $newsiebot->write_page( $pg, $newpage, "A test edit" );
 
     $newsiebot->conflict    = false;
-    $r  = $newsiebot->write_page( $pg, $page, "A test rollback" );
+//    $r  = $newsiebot->write_page( $pg, $page, "A test rollback" );
 
     sleep(5);  // quick nap
     echo "Go edit...\r\n";
     sleep(45); // minor snooze
 
     $newsiebot->readtime    = $newsiebot->timestamp;
-    $r  = $newsiebot->write_page( $pg, $newpage, "Force conflict" );
+//    $r  = $newsiebot->write_page( $pg, $newpage, "Force conflict" );
 
     if ( $r == false ) {
         echo "Error editing page\r\n    Msg: ".$newsiebot->error." Severity: ".$newsiebot->errcode."\r\n";

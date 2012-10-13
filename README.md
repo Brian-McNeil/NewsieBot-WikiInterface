@@ -6,11 +6,11 @@ Complete WikiBot.class.php with basic page functions as-follows:
 A   Page write functions
 B   Additional page fetch/read functions
 
-A.1     Write complete new page.
-A.2     Append new section to a page.
-A.3     Update a section in a page.
-- Must handle edit conflict in A.1 and A.3
-- Must have option to have A.2 fail if trying to add to a nonexistent page
+A.1     Write complete new page. {{done}}
+A.2     Append new section to a page. {{done}}
+A.3     Update a section in a page. {{done}}
+- Must handle edit conflict in A.1 and A.3 {{done}}
+- Must have option to have A.2 fail if trying to add to a nonexistent page {{done}}, untested
 
 B.1 Fetch a section from a page.
 

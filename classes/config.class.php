@@ -1,18 +1,23 @@
 <?php
 /**
-    Title:		NewsieBot: config.class.php
-    Author(s):	Brian McNeil ([[n:Brian McNeil]])
-    Description:
-        Initialise a class containing relevant information for an
-        instance of NewsieBot
-
-    Version History
-    ===============
-    Vers.		Date		Author		Summary
-    0.0.1		2012-09-19	BMcN		Creation
-
-    Copyright:	CC-BY-2.5 - http://creativecommons.org/licenses/by/2.5/
+ *  Title:      config.class.php
+ *  Author(s):  Brian McNeil ([[n:Brian McNeil]])
+ *  Version:    0.0.2-0
+ *  Date:       October 13, 2012
+ *  Description:
+ *      Initialise a class for use of NewsieBot. This assumes the bot will
+ *      work with a wiki, and a database. Database parameters and details
+ *      for in-use wiki are pulled from NewsieBot_parameters.php
+ *
+ *      Copyright: CC-BY-2.5 (See Creative Commons website for full terms)
+ *
+ *  History
+ *      0.0.1-0    2012-09-28   Brian McNeil
+ *                              Create class
+ *      0.0.2-0    2012-10-13   Brian McNeil
+ *                              Tear out unused 'debug' stuff; to redo at later date
  **/
+
 require_once(CLASSPATH.'NewsieBot_parameters.php');
 
 class bot_config {
@@ -20,15 +25,9 @@ class bot_config {
     private $cf;
 
     function __construct ( $debug=false ) {
-        $this->dbg("Configuring NewsieBot config instance ",5);
 
-        $this->cf = array(
-            'debug'	=> $debug,
-            'lvl'	=> "oFEWSI!!!!!!!!!!", //Fatal,Error,Warning,Status,Info,eh?
-            'vers'  => "0.0.1",
-            'errmsg' => "Error not caught/documented",
-            'errlevel' => 1
-                );
+        $this->cf = array();
+        $this->cf['quiet']	= true; // Use for debug (to be implemented)
         $this->cf['database_cfg'] = $this->set_dbparameters();
         $this->bot = $this->setparameters($this->cf['database_cfg']);
     }
@@ -69,7 +68,6 @@ class bot_config {
     }
 
     public function get_conn_pars() {
-        $this->dbg("Returning database connection parameters",5);
         $r	= array(
               $this->bot['conn'][0],
               $this->bot['conn'][1],
@@ -81,16 +79,8 @@ class bot_config {
     }
 
     function __destruct() {
-        $this->dbg("Destructing NewsieBot config instance",5);
-        $this->dbg("    Version:".$this->cf['vers'],5);
         unset($this->bot);
         unset($this->cf);
-    }
-
-    private function dbg( $str, $lev ) {
-        if ($this->cf['debug'])
-            if ($this->cf['debug'] >= $lev )
-                echo date('c').'  ['.substr($this->cf['lvl'],$lev,1)."] $str\r\n";
     }
 }
 ?>

@@ -22,6 +22,8 @@ require_once(CLASSPATH.'HTTPcurl.class.php');
  * @author Brian McNeil
  **/
 class WikiBot {
+
+    static $version     = "WikiBot.class v0.0.3-0";
     // For safety, should user mangle data for wiki, the test
     // wiki is set as a default and the path to the API is as-per
     // the usual default for a 'vanilla' MediaWiki install.
@@ -68,8 +70,10 @@ class WikiBot {
         $r['newpage']           = false; // Not writing new page unless say so
         $r['readtime']          = 0; // Set this to time page retrieved if not
                                      // writing most-recently-read page.
-        // Keep quiet unless told otherwise
+        // Keep quiet unless told otherwise, default run message
         $r['quiet']     = $quiet;
+        $r['runmsg']    = "\r\n* Run of ".self::$version."\r\n"
+                        .': Start:'.gmdate( 'Y-m-d H:i:m' );
         $this->bot  = $r;
         return true;
     }
@@ -154,6 +158,7 @@ class WikiBot {
      * @return      void
      **/
     function __destruct() {
+        if ( $this->quiet == false )    echo "Tearing down bot instance\r\n";
         unset($this->bot);
     }
 
@@ -267,10 +272,34 @@ class WikiBot {
      **/
      function logout() {
          if ( $this->quiet == false )    echo "Logging out\r\n";
+         if (Bot_LOG !== false ) var_dump($this->log_actions() );
+
          $this->query( '?action=logout&format=php' );
      }
 
-     /**
+    /**
+     * Function to try and log the bot's actions
+     * @return      Can be discarded
+     **/
+    private function log_actions() {
+        if ( $this->quiet == false )    echo "Logging bot's work\r\n";
+        $pg         = $this->get_page( Bot_LOG, true );
+        if ( $pg == false )     return false;   // Can't load log page? Bail out.
+        $content    = $this->bot['runmsg']."\r\n: End: ".gmdate( 'Y-m-d H:i:m' )
+                    .$pg;
+        $logged = substr_count( $content, "\r\n*" );
+        if ( $logged > Bot_LGMAX ) {
+            // Have more items logged than limit, work back to limit
+            while ( --$logged > Bot_LGMAX && $ptr = strrpos($pg, "\r\n*") ) {
+                $content         = substr( $content, 0, $ptr );
+            }
+        }
+        $this->bot['minor']     = true;
+        $this->bot['conflict']  = false;
+        return $this->write_page( Bot_LOG, $content, 'Logging bot work' );
+    }
+
+    /**
      * General 'page-fetching' function
      * @param $page     The title of the required page
      * @param $gettoken If an edit token is required, also results in the

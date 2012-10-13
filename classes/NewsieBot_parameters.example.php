@@ -23,5 +23,8 @@ define('dB_PASS', 'MyDatabasePassWord');
 define('mW_USER', 'BotUsername');
 define('mW_PASS', 'BotWikiPassword');
 define('mW_WIKI', 'http://test.wikipedia.org');
+
+define('Bot_LGMAX', 100); // Max actions or runs to record
+define('Bot_LOG', false); // set to page where log goes
 // You didn't think I'd upload *real* values, did you>
 ?>

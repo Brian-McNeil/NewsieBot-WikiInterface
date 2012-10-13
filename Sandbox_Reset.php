@@ -34,7 +34,8 @@ if (!$newsiebot) {
     // Fetch Sandbox page, and edit token.
     $page   = $newsiebot->get_page( $sandbox, true );
     $content    = '{{sandbox}}';
-
+    $newsiebot->runmsg  = $newsiebot->runmsg
+                        ."\r\n:: Check Sandbox";
     if ($page !== false ) {
         // MediaWiki timestamps look like: "2012-10-12T16:52:52Z"
         $timestamp  = $newsiebot->rev_time; // Grab the timestamp of current revision
@@ -49,7 +50,12 @@ if (!$newsiebot) {
         if ( ( strcmp( $compdate, $timestamp ) > 0 ) && ( strcmp( $page, $content ) !== 0 ) ) {
             // Time to reset the sandbox...
             $r  = $newsiebot->write_page( $sandbox, $content, "Clear sandbox, untouched for six hours" );
-            if ( $r !== false ) echo "Sandbox reset.\r\n";
+            if ( $r !== false ) {
+                echo "Sandbox reset.\r\n";
+                $newsiebot->runmsg  = $newsiebot->runmsg
+                                    ."\r\n:: RESET Sandbox";
+            }
+
         }
     }
 }

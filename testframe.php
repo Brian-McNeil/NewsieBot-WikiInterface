@@ -12,7 +12,7 @@ require_once(CLASSPATH.'config.class.php');
 require_once(CLASSPATH.'WikiBot.class.php');
 
 $newsiebot  = new WikiBot(mW_WIKI);
-$pg         = "Wikinews:Newsroom";
+$pg         = "Tomatoes, watermelons, peppers reduce stroke risk, Finnish study suggests";
 
 if (!$newsiebot) {
     echo "Error initializing wikibot";
@@ -21,6 +21,8 @@ if (!$newsiebot) {
     $newsiebot->quiet = false;
     if (!$r)
         die();
+    $newsiebot->runmsg  = $newsiebot->runmsg
+                        ."\r\n::: Development run";
 
     // Try and see if this pulls the TOC
     $toc    = $newsiebot->get_toc( $pg );

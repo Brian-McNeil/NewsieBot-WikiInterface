@@ -183,24 +183,6 @@ class WikiBot {
         return unserialize($r);
     }
 
-    private function content( $query, $postdata = null ) {
-        if ( $this->quiet == false )    echo "Doing content retrieval: $query \r\n";
-        $r  = null;
-        $wURL   = $this->URL;
-        if ($postdata == null ) {
-            if ( $this->quiet == false )    echo "    Request type: GET\r\n";
-            $r  = $this->bot['cURL']->http_get($wURL.$query);
-        } else {
-            if ( $this->quiet == false )    echo "    Request type: POST\r\n";
-            $r  = $this->bot['cURL']->http_post($wURL.$query, $postdata);
-        }
-        if (!$r) {
-            $this->bot['error']     = "Error with cURL library";
-            $this->bot['errcode']   = 'fatal';
-            return false;
-        }
-        return unserialize($r);
-    }
     /**
      * API query function; sends a query to the target MediaWiki using the API
      * @param $query    Passed-in query string (eg '&prop=revisions&title=Foo')

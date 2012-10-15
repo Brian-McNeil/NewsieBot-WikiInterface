@@ -20,6 +20,9 @@
 if ( !defined('curlTMPstor') ) {
     define( "curlTMPstor", '/tmp/' );
 }
+if ( !defined('CRLF') ) {
+    define( 'CRLF', "\r\n" );
+}
 
 class HTTPcurl {
 

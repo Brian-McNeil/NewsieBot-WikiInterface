@@ -11,6 +11,9 @@
  *      Copyright: CC-BY-2.5 (See Creative Commons website for full terms)
  *
  *  History
+ *      0.0.4-0    2012-10-13   Brian McNeil
+ *                              Abstract debug output, error handling,
+ *                              improve get_toc performance by using MW array fmt
  *      0.0.3-0    2012-10-13   Brian McNeil
  *                              Document now at most-basic functions.
  **/
@@ -23,7 +26,7 @@ require_once(CLASSPATH.'HTTPcurl.class.php');
  **/
 class WikiBot {
 
-    static $version     = "WikiBot.class v0.0.3-0";
+    static $version     = "WikiBot.class v0.0.4-0";
     // For safety, should user mangle data for wiki, the test
     // wiki is set as a default and the path to the API is as-per
     // the usual default for a 'vanilla' MediaWiki install.
@@ -31,6 +34,12 @@ class WikiBot {
     const DEFAULT_api   = '/w/api.php';
     const API_qry       = '?action=query&format=php';
     const API_parse     = '?action=parse&format=php';
+
+    const ERR_fatal     = 'fatal';
+    const ERR_error     = 'error';
+    const ERR_warn      = 'warning';
+    const ERR_info      = 'info';
+    const ERR_success   = 'success';
 
     private $bot;
 
@@ -60,9 +69,6 @@ class WikiBot {
         $r['revid']     = null;
         $r['pagetitle'] = null;
         $r['rev_time']  = null;
-        // Thow around some error stuff
-        $r['error']     = null;
-        $r['errcode']   = null;
         // Default behaviours - These reset on every page write!
         $r['bot']               = true; // We're a bot
         $r['minor']             = false; // We don't make minor edits
@@ -72,10 +78,10 @@ class WikiBot {
                                      // writing most-recently-read page.
         // Keep quiet unless told otherwise, default run message
         $r['quiet']     = $quiet;
-        $r['runmsg']    = "\r\n* Run of ".self::$version."\r\n"
+        $r['runmsg']    = CRLF."* Run of ".self::$version.CRLF
                         .': Start:'.gmdate( 'Y-m-d H:i:m' );
         $this->bot  = $r;
-        return true;
+        return self::ERR_ret( self::ERR_success, "Initialised bot class" );
     }
 
     /**
@@ -86,9 +92,7 @@ class WikiBot {
     public function __get( $var ) {
         // Explicitly block access to the cURL object
         if ( $var == 'cURL' ) {
-            $this->bot['error']     = "Access to cURL details not permitted";
-            $this->bot['errcode']   = 'fatal';
-            return false;
+            return self::ERR_ret( self::ERR_error, "Access to cURL details not permitted" );
         }
         // Special case - bot username
         if ( $var == 'user' ) {
@@ -97,9 +101,7 @@ class WikiBot {
         }
         // No trying anything 'cute'; only accept string
         if (!is_string($var)) {
-            $this->bot['error']     = "Invalid variable access attempt, must be string containing variable name";
-            $this->bot['errcode']   = 'warning';
-            return false;
+            return self::ERR_ret( self::ERR_warn, "Invalid variable access attempt, must be string containing variable name" );
         }
         // If we've got a relevant variable, return it
         if (isset($this->bot[$var]))
@@ -109,27 +111,47 @@ class WikiBot {
     }
 
     /**
+     * Abstract debug output
+     * @param $string   String to prinr if debug on
+     * @return          void
+     **/
+    private function DBGecho( $string = '' ) {
+        if ( $this->quiet == false )    echo $string.CRLF;
+    }
+
+    /**
+     * Basic error logging within the class
+     * @param $code     Error code (eg self::ERR_warn)
+     * @param $text     Text of error message to stash
+     * @return          false if code is ERR_fatal or ERR_error,
+     *                  void if ERR_warn, else true
+     **/
+    private function ERR_ret( $code = '', $text = '' ) {
+        $this->bot['error']     = $text;
+        $this->bot['errcode']   = $code;
+
+        if ( $code == self::ERR_fatal || $code == self::ERR_error )
+            return false;
+        if ( $code == self::ERR_info || $code == self::ERR_success )
+            return true;
+
+    }
+    /**
      * A limited-scope 'set' function.
      * @param $var      'bot' variable to set
      * @param $value    Value to assign to variable
      * @return          True if successful, false if fails
      **/
      public function __set( $var, $value ) {
-         if ( $this->quiet == false )
-             echo "Request to set variable: $var to '$value'\r\n";
+         self::DBGecho( "Request to set variable: $var to '$value'" );
          if ( $var == 'cURL' || $var == 'credentials' ) {
-             $this->error   = "Setting protected variable outside object creation not permitted.";
-             $this->errcode = 'fail';
-             return false;
+            return self::ERR_ret( self::ERR_error, "Setting protected variable outside object creation not permitted." );
          }
-
          if ( isset( $this->bot[$var] ) ) {
              $this->bot[$var]   = $value;
              return true;
          } else {
-             $this->error   = "Request to set undefined object variable for WikiBot class.";
-             $this->errcode = 'warning';
-             return false;
+             return self::ERR_ret( self::ERR_warn, "Request to set undefined object variable for WikiBot class." );
          }
 
      }
@@ -158,7 +180,7 @@ class WikiBot {
      * @return      void
      **/
     function __destruct() {
-        if ( $this->quiet == false )    echo "Tearing down bot instance\r\n";
+        self::DBGecho( "Tearing down bot instance" );
         unset($this->bot);
     }
 
@@ -170,20 +192,18 @@ class WikiBot {
      * @return          False if fails, or unserialized result data
      **/
     private function query( $query, $postdata = null ) {
-        if ( $this->quiet == false )    echo "Doing query: $q \r\n";
+        self::DBGecho( "Doing query: '".$query."'" );
         $r  = null;
         $wURL   = $this->URL;
         if ($postdata == null ) {
-            if ( $this->quiet == false )    echo "    Request type: GET\r\n";
+            self::DBGecho( "    Request type: GET" );
             $r  = $this->bot['cURL']->http_get($wURL.$query);
         } else {
-            if ( $this->quiet == false )    echo "    Request type: POST\r\n";
+            self::DBGecho( "    Request type: POST" );
             $r  = $this->bot['cURL']->http_post($wURL.$query, $postdata);
         }
         if (!$r) {
-            $this->bot['error']     = "Error with cURL library";
-            $this->bot['errcode']   = 'fatal';
-            return false;
+            return self::ERR_ret( self::ERR_fatal, "Error with cURL initialization" );
         }
         return unserialize($r);
     }
@@ -195,15 +215,13 @@ class WikiBot {
      * @return          False if fails, or unserialized result data
      **/
     function query_api( $query, $postdata = null ) {
-        if ( $this->quiet == false )    echo "API query of: $query \r\n";
-
+        self::DBGecho( "API query of: '$query'" );
         $q  = self::API_qry.$query;
         return $this->query($q, $postdata);
     }
 
     function query_content( $query, $postdata = null ) {
-        if ( $this->quiet == false )    echo "Content request of: $query \r\n";
-
+        self::DBGecho( "Content request of: '$query'") ;
         $q  = self::API_parse.$query;
         return $this->query($q, $postdata);
     }
@@ -215,7 +233,7 @@ class WikiBot {
      * @return          False if fails, or array of data from the API if succeeds
      **/
     function login( $user = null, $pass = null ) {
-        if ( $this->quiet == false )    echo "Logging in, user: $user \r\n";
+        self::DBGecho( "Logging in, User:$user" );
         $q          = '?action=login&format=php';
 
         // If the username is passed in, then we use what we're given
@@ -227,14 +245,12 @@ class WikiBot {
                         );
             $this->bot['credentials']   = $postdata;
         } else {
-            if ( $this->quiet == false )    echo "    Trying to retrieve saved credentials\r\n";
+            self::DBGecho( "    Trying to retrieve saved credentials" );
             // Otherwise, try to retrieve saved credentials
             if (isset($this->bot['credentials'])) {
                 $postdata   = $this->bot['credentials'];
             } else {
-                $this->bot['error']     = "Login failed; no credentials supplied";
-                $this->bot['errcode']   = 'fatal';
-                return false;   // Fail, don't have any saved credentials
+                return self::ERR_ret( self::ERR_error, "Login failed; no credentials supplied" );
             }
         }
         // Start trying to log in...
@@ -246,23 +262,17 @@ class WikiBot {
                 $r  = $this->query( $q, $postdata );
             }
         } else {
-            $this->bot['error']     = "Login failed; no result returned";
-            $this->bot['errcode']   = 'fatal';
-            return false;   // It failed to give a result at-all
+            return self::ERR_ret( self::ERR_fatal, "Login failed; no result returned" );
         }
         if (isset($r['login']['result'])) {
             if ($r['login']['result'] !== 'Success') {
                 // The login failed, probably incorrect credentials
-                $this->bot['error']     = "Login failed; returned:".$r['login']['result'];
-                $this->bot['errcode']   = 'fatal';
-                return false;
+                return self::ERR_ret( self::ERR_error, "Login failed; returned:".$r['login']['result'] );
             } else {
                 return $r;
             }
         } else {
-                $this->bot['error']     = "Login failed; no result returned";
-                $this->bot['errcode']   = 'fatal';
-                return false;   // Again, didn't get returned a result.
+            return self::ERR_ret( self::ERR_fatal, "Login failed; no result returned" );
         }
     }
 
@@ -271,7 +281,7 @@ class WikiBot {
      * @return          Falls out, thus returning null
      **/
      function logout() {
-         if ( $this->quiet == false )    echo "Logging out\r\n";
+         self::DBGecho( "Logging out" );
          if (Bot_LOG !== false ) var_dump($this->log_actions() );
 
          $this->query( '?action=logout&format=php' );
@@ -282,15 +292,15 @@ class WikiBot {
      * @return      Can be discarded
      **/
     private function log_actions() {
-        if ( $this->quiet == false )    echo "Logging bot's work\r\n";
+        self::DBGecho ("Logging bot's work" );
         $pg         = $this->get_page( Bot_LOG, true );
         if ( $pg == false )     return false;   // Can't load log page? Bail out.
-        $content    = $this->bot['runmsg']."\r\n: End: ".gmdate( 'Y-m-d H:i:m' )
+        $content    = $this->bot['runmsg'].CRLF.": End: ".gmdate( 'Y-m-d H:i:m' )
                     .$pg;
-        $logged = substr_count( $content, "\r\n*" );
+        $logged = substr_count( $content, CRLF."*" );
         if ( $logged > Bot_LGMAX ) {
             // Have more items logged than limit, work back to limit
-            while ( --$logged > Bot_LGMAX && $ptr = strrpos($pg, "\r\n*") ) {
+            while ( --$logged > Bot_LGMAX && $ptr = strrpos($pg, CRLF."*") ) {
                 $content         = substr( $content, 0, $ptr );
             }
         }
@@ -308,10 +318,10 @@ class WikiBot {
      * @return          False if fails, or wikitext of desired page
      **/
     function get_page( $page, $gettoken = false, $revid = null ) {
-        if ( $this->quiet == false )    echo "Fetching page: $page \r\n";
+        self::DBGecho( "Fetching page: '$page'" );
         // If asked for an edit token when fetching page, query differs
         if ( $gettoken ) {
-            if ( $this->quiet == false )    echo "    Asking edit token\r\n";
+            self::DBGecho( "    Asking edit token" );
             $q  = '&prop=revisions|info&intoken=edit';
         } else {
             $q  = '&prop=revisions';
@@ -324,19 +334,17 @@ class WikiBot {
 
         $r  = $this->query_api( $q );
         if (!$r) {
-            $this->bot['error']     = "No data returned by MediaWiki API";
-            $this->bot['errcode']   = 'fatal';
-            return false;
+            return self::ERR_ret( self::ERR_fatal, "No data returned by MediaWiki API" );
         }
 
-        foreach ($r['query']['pages'] as $t_page) {
+        foreach ( $r['query']['pages'] as $t_page ) {
             // Now, stash page fetched and the revision ID.
             $this->bot['pagetitle'] = $page;
             $this->bot['rev_time']  = $t_page['revisions'][0]['timestamp'];
             $this->bot['revid']     = $t_page['revisions'][0]['revid'];
 
             // Save details of the edit token and the 'edit' start timestamp
-            if ($get_token !== false ) {
+            if ( $gettoken !== false ) {
                 $this->bot['token']     = $t_page['edittoken'];
                 $this->bot['timestamp'] = $t_page['starttimestamp'];
             }
@@ -344,9 +352,7 @@ class WikiBot {
             return $t_page['revisions'][0]['*'];
         }
         // If we hit here, we've not got a page back
-        $this->bot['error']     = "Unknown error fetching wiki page";
-        $this->bot['errcode']   = 'warning';
-        return false;
+        return self::ERR_ret( self::ERR_error, "Unknown error fetching wiki page" );
     }
 
     /**
@@ -364,7 +370,7 @@ class WikiBot {
      * @return          False if fails, otherwise the data returned by the API.
      **/
     function write_page( $title, $content, $summary = null, $section = null ) {
-        if ( $this->quiet == false )    echo "Writing to page:$title \r\n";
+        self::DBGecho( "Writing to page: '$title'" );
         $q      = '?action=edit&format=php';
         $post   = array(
                 'title'                             => $title,
@@ -380,9 +386,7 @@ class WikiBot {
         } elseif ( !$this->newpage ) {
             // Null timestamp, must be editing last-page retrieved if $new not true
             if ( $this->pagetitle !== $title ) {
-                $this->bot['error']     = "Cannot update a page that not previously retrieved\r\n" ;
-                $this->bot['errcode']   = 'warning';
-                return false;
+                return self::ERR_ret( self::ERR_warn, "Cannot update a page that not previously retrieved" );
             }
         }
 
@@ -415,9 +419,9 @@ class WikiBot {
 
                                         $result = $this->query( $q, $post );
         if ( isset($result['error']) ) {
-            $this->bot['error']     = $result['error']['info'];
-            $this->bot['errcode']   = $result['error']['code'];
-            return false;
+            return self::ERR_ret( self::ERR_error, "API error, info:"
+                .$result['error']['info']
+                ." Result:".$result['error']['code'] );
         }
         return $result;
     }
@@ -431,14 +435,17 @@ class WikiBot {
      **/
     function get_toc( $page, $revid = null ) {
         $toc    = array();
-        $toc[] = array(
-            'index'     => '0',
-            'heading'   => '',
-            'level'     => '0',
-            'page'      => $page,
-            'number'    => '0'
+        $toc[] = array( // This is the element layout as-per MediaWiki
+            'toclevel'      => 0,
+            'level'         => '0',
+            'line'          => '',
+            'number'        => '0',
+            'index'         => '0',
+            'fromtitle'     => $page,
+            'byteoffset'    => 0,
+            'anchor'        => ''
             );
-        if ( $this->quiet == false )    echo "Fetching TOC for: $page \r\n";
+        self::DBGecho( "Fetching TOC for: '$page'" );
 
         $q  = '&prop=sections&page='.urlencode($page);
         if ( $revid !== null )
@@ -446,29 +453,17 @@ class WikiBot {
 
         $r  = $this->query_content( $q );
         if ( isset($r['error']) ) { // Error getting any page data
-            $this->bot['error']     = $r['error']['string'];
-            $this->bot['errcode']   = 'error';
-            return false;
+            return self::ERR_ret( self::ERR_error, "API error, info:"
+                .$result['error']['info']
+                ." Result:".$result['error']['code'] );
         }
         $toc_elem   = $r['parse']['sections'];
-
         if ( empty($toc_elem) ) { // Empty, does that mean page doesn't exist?
             if ( $this->get_page( $page ) == false) {
-                $this->bot['error']     = "Requested TOC for nonexistent page";
-                $this->bot['errcode']   = 'warning';
-                return false;
+                return self::ERR_ret( self::ERR_warn, "Requested TOC for nonexistent page" );
             }
         }
-        foreach ($toc_elem as $line ) {
-            $toc[]  = array(
-                'index'     => $line['index'],
-                'heading'   => $line['line'],
-                'level'     => $line['level'],
-                'page'      => $line['fromtitle'],
-                'number'    => $line['number']
-                );
-        }
-        return $toc;
+        return array_merge($toc, $toc_elem);
     }
 }
 ?>

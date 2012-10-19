@@ -12,7 +12,7 @@ require_once(CLASSPATH.'config.class.php');
 require_once(CLASSPATH.'WikiBot.class.php');
 
 $newsiebot  = new WikiBot(mW_WIKI);
-$pg         = "Tomatoes, watermelons, peppers reduce stroke risk, Finnish study suggests";
+$pg         = "Project:Water cooler";
 
 if (!$newsiebot) {
     echo "Error initializing wikibot";
@@ -22,19 +22,17 @@ if (!$newsiebot) {
     if (!$r)
         die();
     $newsiebot->runmsg  = $newsiebot->runmsg
-                        ."\r\n::: Development run";
+                        ."\r\n:: Testing and Development run";
 
     // Try and see if this pulls the TOC
     $toc    = $newsiebot->get_toc( $pg );
+    echo "Dumping returned data for page TOC:\r\n";
     var_dump($toc);
 
-    // Try for nonexistent page
-    $toc   = $newsiebot->get_toc( "no-sooch-page" );
-    var_dump($toc);
+    $sectxt = $newsiebot->get_section( $pg, 0 );
+    echo "Tried pulling 0th section; content:\r\n";
+    var_dump($sectxt);
 
-    // Try to make it a'splode
-    $toc   = $newsiebot->get_toc( "Special:no-sooch-page" );
-    var_dump($toc);
 
     echo "Logging out\r\n";
     $newsiebot->logout();

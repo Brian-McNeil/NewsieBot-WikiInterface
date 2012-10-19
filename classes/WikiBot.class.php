@@ -78,7 +78,7 @@ class WikiBot {
                                      // writing most-recently-read page.
         // Keep quiet unless told otherwise, default run message
         $r['quiet']     = $quiet;
-        $r['runmsg']    = CRLF."* Run of ".self::$version.CRLF
+        $r['runmsg']    = CRLF."# Run of ".self::$version.CRLF
                         .': Start:'.gmdate( 'Y-m-d H:i:m' );
         $this->bot  = $r;
         return self::ERR_ret( self::ERR_success, "Initialised bot class" );
@@ -295,7 +295,7 @@ class WikiBot {
         self::DBGecho ("Logging bot's work" );
         $pg         = $this->get_page( Bot_LOG, true );
         if ( $pg == false )     return false;   // Can't load log page? Bail out.
-        $content    = $this->bot['runmsg'].CRLF.": End: ".gmdate( 'Y-m-d H:i:m' )
+        $content    = $this->runmsg.CRLF.": End: ".gmdate( 'Y-m-d H:i:m' )
                     .$pg;
         $logged = substr_count( $content, CRLF."*" );
         if ( $logged > Bot_LGMAX ) {
@@ -310,15 +310,35 @@ class WikiBot {
     }
 
     /**
-     * General 'page-fetching' function
+     * Page section fetching function
+     *  This simply calls the get_page method with parameters reordered
      * @param $page     The title of the required page
+     * @param $section  The page's section number
      * @param $gettoken If an edit token is required, also results in the
      *                  page's timestamp and revid being saved.
      * @param $revid    The revision ID (optional) to be fetched
      * @return          False if fails, or wikitext of desired page
      **/
-    function get_page( $page, $gettoken = false, $revid = null ) {
-        self::DBGecho( "Fetching page: '$page'" );
+    function get_section( $page, $section, $gettoken = false, $revid = null ) {
+        return self::get_page( $page, $gettoken, $revid, $section );
+    }
+
+    /**
+     * General 'page-fetching' function
+     * @param $page     The title of the required page
+     * @param $gettoken If an edit token is required, also results in the
+     *                  page's timestamp and revid being saved.
+     * @param $revid    The revision ID (optional) to be fetched
+     * @param $section  When a section of a page is required, pass section number
+     * @return          False if fails, or wikitext of desired page
+     **/
+    function get_page( $page, $gettoken = false, $revid = null, $section = null ) {
+        if ( $section === null ) {
+            self::DBGecho( "Fetching page: '$page'" );
+        } else {
+            self::DBGecho( "Fetching section number $section from: '$page'" );
+        }
+
         // If asked for an edit token when fetching page, query differs
         if ( $gettoken ) {
             self::DBGecho( "    Asking edit token" );
@@ -331,6 +351,10 @@ class WikiBot {
         // If asking for specific version, select such
         if ($revid !== null )
             $q  .= '&rvstartid='.$revid;
+
+        // If asking for a section, pass to API
+        if ( $section !== null )
+            $q  .= '&rvsection='.$section;
 
         $r  = $this->query_api( $q );
         if (!$r) {
@@ -454,8 +478,7 @@ class WikiBot {
         $r  = $this->query_content( $q );
         if ( isset($r['error']) ) { // Error getting any page data
             return self::ERR_ret( self::ERR_error, "API error, info:"
-                .$result['error']['info']
-                ." Result:".$result['error']['code'] );
+                .$result['error']['info']." Result:".$result['error']['code'] );
         }
         $toc_elem   = $r['parse']['sections'];
         if ( empty($toc_elem) ) { // Empty, does that mean page doesn't exist?

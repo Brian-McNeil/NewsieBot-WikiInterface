@@ -2,7 +2,7 @@
 /**
  *  Title:      WikiBot.class.php
  *  Author(s):  Brian McNeil ([[n:Brian McNeil]])
- *  Version:    0.0.3-0
+ *  Version:    0.1.0-0
  *  Date:       October 13, 2012
  *  Description:
  *      Basic class for interaction with MediaWiki. Handles login/out,
@@ -11,6 +11,10 @@
  *      Copyright: CC-BY-2.5 (See Creative Commons website for full terms)
  *
  *  History
+ *      0.1.0-0    2012-10-20   Brian McNeil
+ *                              Now stable, tidy, order methods/functions,
+ *                              add explicit write_section() method,
+ *                              pull the config class here if not already done.
  *      0.0.4-0    2012-10-13   Brian McNeil
  *                              Abstract debug output, error handling,
  *                              improve get_toc performance by using MW array fmt
@@ -18,6 +22,7 @@
  *                              Document now at most-basic functions.
  **/
 
+require_once(CLASSPATH.'config.class.php');
 require_once(CLASSPATH.'HTTPcurl.class.php');
 
 /**
@@ -26,7 +31,7 @@ require_once(CLASSPATH.'HTTPcurl.class.php');
  **/
 class WikiBot {
 
-    static $version     = "WikiBot.class v0.0.4-0";
+    static $version     = "WikiBot.class v0.1.0-0";
     // For safety, should user mangle data for wiki, the test
     // wiki is set as a default and the path to the API is as-per
     // the usual default for a 'vanilla' MediaWiki install.
@@ -85,6 +90,15 @@ class WikiBot {
     }
 
     /**
+     * Destructor; frees up the bot instance
+     * @return      void
+     **/
+    function __destruct() {
+        self::DBGecho( "Tearing down bot instance" );
+        unset($this->bot);
+    }
+
+    /**
      * A generalised get function which accesses the bot array
      * @param $var      Variable being sought
      * @return          The value from the variable, or null
@@ -111,32 +125,6 @@ class WikiBot {
     }
 
     /**
-     * Abstract debug output
-     * @param $string   String to prinr if debug on
-     * @return          void
-     **/
-    private function DBGecho( $string = '' ) {
-        if ( $this->quiet == false )    echo $string.CRLF;
-    }
-
-    /**
-     * Basic error logging within the class
-     * @param $code     Error code (eg self::ERR_warn)
-     * @param $text     Text of error message to stash
-     * @return          false if code is ERR_fatal or ERR_error,
-     *                  void if ERR_warn, else true
-     **/
-    private function ERR_ret( $code = '', $text = '' ) {
-        $this->bot['error']     = $text;
-        $this->bot['errcode']   = $code;
-
-        if ( $code == self::ERR_fatal || $code == self::ERR_error )
-            return false;
-        if ( $code == self::ERR_info || $code == self::ERR_success )
-            return true;
-
-    }
-    /**
      * A limited-scope 'set' function.
      * @param $var      'bot' variable to set
      * @param $value    Value to assign to variable
@@ -157,6 +145,33 @@ class WikiBot {
      }
 
     /**
+     * Abstract debug output
+     * @param $string   String to prinr if debug on
+     * @return          void
+     **/
+    private function DBGecho( $string = '' ) {
+        if ( $this->quiet === false )    echo $string.CRLF;
+    }
+
+    /**
+     * Basic error logging within the class
+     * @param $code     Error code (eg self::ERR_warn)
+     * @param $text     Text of error message to stash
+     * @return          false if code is ERR_fatal or ERR_error,
+     *                  void if ERR_warn, else true
+     **/
+    private function ERR_ret( $code = '', $text = '' ) {
+        $this->bot['error']     = $text;
+        $this->bot['errcode']   = $code;
+
+        if ( $code == self::ERR_fatal || $code == self::ERR_error )
+            return false;
+        if ( $code == self::ERR_info || $code == self::ERR_success )
+            return true;
+
+    }
+
+    /**
      * Configuration function, creates, and returns, the cURL instance
      * @return      false if fails, otherwise an array holding
      *              the cURL instance and the wiki's API URL
@@ -173,15 +188,6 @@ class WikiBot {
         $r['timestamp'] = null;
         $r['cURL']->param['quiet']  = false; // try to make noisy
         return $r;
-    }
-
-    /**
-     * Destructor; frees up the bot instance
-     * @return      void
-     **/
-    function __destruct() {
-        self::DBGecho( "Tearing down bot instance" );
-        unset($this->bot);
     }
 
     /**
@@ -209,6 +215,28 @@ class WikiBot {
     }
 
     /**
+     * Function to try and log the bot's actions
+     * @return      Can be discarded
+     **/
+    private function log_actions() {
+        self::DBGecho ("Logging bot's work" );
+        $pg         = $this->get_page( Bot_LOG, true );
+        if ( $pg == false )     return false;   // Can't load log page? Bail out.
+        $content    = $this->runmsg.CRLF.": End: ".gmdate( 'Y-m-d H:i:m' )
+                    .$pg;
+        $logged = substr_count( $content, CRLF."*" );
+        if ( $logged > Bot_LGMAX ) {
+            // Have more items logged than limit, work back to limit
+            while ( --$logged > Bot_LGMAX && $ptr = strrpos($pg, CRLF."*") ) {
+                $content         = substr( $content, 0, $ptr );
+            }
+        }
+        $this->bot['minor']     = true;
+        $this->bot['conflict']  = false;
+        return self::write_page( Bot_LOG, $content, 'Logging bot work' );
+    }
+
+    /**
      * API query function; sends a query to the target MediaWiki using the API
      * @param $query    Passed-in query string (eg '&prop=revisions&title=Foo')
      * @param $postdata Optional data to go by POST method
@@ -217,14 +245,24 @@ class WikiBot {
     function query_api( $query, $postdata = null ) {
         self::DBGecho( "API query of: '$query'" );
         $q  = self::API_qry.$query;
-        return $this->query($q, $postdata);
+        return self::query( $q, $postdata );
     }
 
+    /**
+     * API parser function; requests the API parse a content request
+     * @param $query    Passed-in query string
+     * @param $postdata Optional data to go by POST method
+     * @return          False if fails, or unserialized result data
+     **/
     function query_content( $query, $postdata = null ) {
         self::DBGecho( "Content request of: '$query'") ;
         $q  = self::API_parse.$query;
-        return $this->query($q, $postdata);
+        return self::query( $q, $postdata );
     }
+
+    /***********************************
+     ** MAIN PUBLIC METHODS/FUNCTIONS **
+     ***********************************/
 
     /**
      * Wiki login function
@@ -274,6 +312,9 @@ class WikiBot {
         } else {
             return self::ERR_ret( self::ERR_fatal, "Login failed; no result returned" );
         }
+
+        // Should never execute, but if does ensure is a failure result
+        return self::ERR_ret( self::ERR_error, "Unknown error logging ine" );
     }
 
     /**
@@ -286,28 +327,6 @@ class WikiBot {
 
          $this->query( '?action=logout&format=php' );
      }
-
-    /**
-     * Function to try and log the bot's actions
-     * @return      Can be discarded
-     **/
-    private function log_actions() {
-        self::DBGecho ("Logging bot's work" );
-        $pg         = $this->get_page( Bot_LOG, true );
-        if ( $pg == false )     return false;   // Can't load log page? Bail out.
-        $content    = $this->runmsg.CRLF.": End: ".gmdate( 'Y-m-d H:i:m' )
-                    .$pg;
-        $logged = substr_count( $content, CRLF."*" );
-        if ( $logged > Bot_LGMAX ) {
-            // Have more items logged than limit, work back to limit
-            while ( --$logged > Bot_LGMAX && $ptr = strrpos($pg, CRLF."*") ) {
-                $content         = substr( $content, 0, $ptr );
-            }
-        }
-        $this->bot['minor']     = true;
-        $this->bot['conflict']  = false;
-        return $this->write_page( Bot_LOG, $content, 'Logging bot work' );
-    }
 
     /**
      * Page section fetching function
@@ -377,6 +396,21 @@ class WikiBot {
         }
         // If we hit here, we've not got a page back
         return self::ERR_ret( self::ERR_error, "Unknown error fetching wiki page" );
+    }
+
+    /**
+     * Write page section function.
+     *  This function as-per write_page, but with different parameter order and assumes a
+     *  new section is being written as-default.
+     *
+     * @param $title    Title of page being accessed/written
+     * @param $content  Content of page, or section, to write
+     * @param $section  A numeric string for section number to edit or 'new' to append new
+     * @param $summary  Edit summary, or new section name
+     * @return          False if fails, otherwise the data returned by the API.
+     **/
+    function write_section( $title, $content, $section = 'new', $summary = null ) {
+        return self::write_page( $title, $content, $summary, $section );
     }
 
     /**

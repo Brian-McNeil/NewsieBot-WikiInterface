@@ -8,9 +8,9 @@
  **/
 
 define('CLASSPATH', '/home/wikinews/NewsieBot/classes/');
-require_once(CLASSPATH.'WikiBot.class.php');
+require_once(CLASSPATH.'WikiBot_media.class.php');
 
-$newsiebot  = new WikiBot(mW_WIKI);
+$newsiebot  = new WikiBot_media(mW_WIKI);
 $pg         = "Project:Water cooler/miscellaneous";
 
 if (!$newsiebot) {
@@ -20,8 +20,7 @@ if (!$newsiebot) {
     $newsiebot->quiet = false;
     if (!$r)
         die();
-    $newsiebot->runmsg  = $newsiebot->runmsg
-                        .CRLF.":: Testing and Development run";
+    $newsiebot->runmsg  = "Testing and Development run";
 
     // Try and see if this pulls the TOC
     $toc    = $newsiebot->get_toc( $pg );
@@ -41,7 +40,19 @@ if (!$newsiebot) {
 //    $write = $newsiebot->write_section( $pg, $sectxt, 'new', "A bot-generated section" );
 //    if ( !$write )  var_dump( $newsiebot );
 
-    echo "Logging out\r\n";
+    echo "Getting file location".CRLF;
+    $loc    = $newsiebot->media_location( "File:Example.png" );
+    var_dump( $loc );
+
+    echo "Getting file location".CRLF;
+    $loc    = $newsiebot->media_location( "File:Nonexistent-file-requested.png" );
+    var_dump( $loc );
+
+    echo "Testing link retrieval".CRLF;
+    $x  = $newsiebot->get_links( "Main Page" );
+    var_dump( $x );
+
+    echo "Logging out".CRLF;
     $newsiebot->logout();
 }
 ?>

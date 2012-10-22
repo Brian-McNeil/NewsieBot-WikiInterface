@@ -11,15 +11,15 @@
  *      Copyright: CC-BY-2.5 (See Creative Commons website for full terms)
  *
  *  History
+ *      0.0.3-0    2012-10-13   Brian McNeil
+ *                              Document now at most-basic functions.
+ *      0.0.4-0    2012-10-13   Brian McNeil
+ *                              Abstract debug output, error handling,
+ *                              improve get_toc performance by using MW array fmt
  *      0.1.0-0    2012-10-20   Brian McNeil
  *                              Now stable, tidy, order methods/functions,
  *                              add explicit write_section() method,
  *                              pull the config class here if not already done.
- *      0.0.4-0    2012-10-13   Brian McNeil
- *                              Abstract debug output, error handling,
- *                              improve get_toc performance by using MW array fmt
- *      0.0.3-0    2012-10-13   Brian McNeil
- *                              Document now at most-basic functions.
  **/
 
 require_once(CLASSPATH.'config.class.php');
@@ -31,7 +31,7 @@ require_once(CLASSPATH.'HTTPcurl.class.php');
  **/
 class WikiBot {
 
-    static $version     = "WikiBot.class v0.1.0-0";
+    const Version       = "WikiBot.class v0.1.0-0";
     // For safety, should user mangle data for wiki, the test
     // wiki is set as a default and the path to the API is as-per
     // the usual default for a 'vanilla' MediaWiki install.
@@ -83,8 +83,14 @@ class WikiBot {
                                      // writing most-recently-read page.
         // Keep quiet unless told otherwise, default run message
         $r['quiet']     = $quiet;
-        $r['runmsg']    = CRLF."# Run of ".self::$version.CRLF
-                        .': Start:'.gmdate( 'Y-m-d H:i:m' );
+
+        if ( defined( 'WikiBot_Name' ) ) {
+            $rmsg   = CRLF.'# Run of '.WikiBot_Name.' using ';
+        } else {
+            $rmsg   = CRLF.'# Unnamed bot using ';
+        }
+        $r['runmsg']    = $rmsg.self::Version.CRLF
+                        .'#:: Start: '.gmdate( 'Y-m-d H:i:m' );
         $this->bot  = $r;
         return self::ERR_ret( self::ERR_success, "Initialised bot class" );
     }
@@ -135,6 +141,14 @@ class WikiBot {
          if ( $var == 'cURL' || $var == 'credentials' ) {
             return self::ERR_ret( self::ERR_error, "Setting protected variable outside object creation not permitted." );
          }
+         // Special handling for runmsg; append the message as a new line
+         // to be written to the bot's logging page.
+         if ( $var == 'runmsg' ) {
+             if ( strpos( '*:#', substr($value, 0, 1) ) === false )
+                 $value = ' '.$value;
+             $this->bot['runmsg']   = $this->bot['runmsg'].CRLF.'#:'.$value;
+             return true;
+         }
          if ( isset( $this->bot[$var] ) ) {
              $this->bot[$var]   = $value;
              return true;
@@ -149,7 +163,7 @@ class WikiBot {
      * @param $string   String to prinr if debug on
      * @return          void
      **/
-    private function DBGecho( $string = '' ) {
+    function DBGecho( $string = '' ) {
         if ( $this->quiet === false )    echo $string.CRLF;
     }
 
@@ -160,9 +174,9 @@ class WikiBot {
      * @return          false if code is ERR_fatal or ERR_error,
      *                  void if ERR_warn, else true
      **/
-    private function ERR_ret( $code = '', $text = '' ) {
-        $this->bot['error']     = $text;
-        $this->bot['errcode']   = $code;
+    function ERR_ret( $code = '', $text = '' ) {
+        $this->bot['error']    = $text;
+        $this->bot['errcode']  = $code;
 
         if ( $code == self::ERR_fatal || $code == self::ERR_error )
             return false;
@@ -222,18 +236,27 @@ class WikiBot {
         self::DBGecho ("Logging bot's work" );
         $pg         = $this->get_page( Bot_LOG, true );
         if ( $pg == false )     return false;   // Can't load log page? Bail out.
-        $content    = $this->runmsg.CRLF.": End: ".gmdate( 'Y-m-d H:i:m' )
+        $content    = $this->bot['runmsg']
+                    .CRLF."#:: End: ".gmdate( 'Y-m-d H:i:m' )
                     .$pg;
-        $logged = substr_count( $content, CRLF."*" );
-        if ( $logged > Bot_LGMAX ) {
+        $lines = substr_count( $content, "# " );
+        echo "Lines of log:".$logged.CRLF;
+        if ( $lines > Bot_LGMAX ) {
+            echo "Need to trim the log".CRLF;
             // Have more items logged than limit, work back to limit
-            while ( --$logged > Bot_LGMAX && $ptr = strrpos($pg, CRLF."*") ) {
+            while ( $lines-- > Bot_LGMAX && $ptr = strrpos( $content, "# " ) ) {
                 $content         = substr( $content, 0, $ptr );
             }
         }
         $this->bot['minor']     = true;
         $this->bot['conflict']  = false;
-        return self::write_page( Bot_LOG, $content, 'Logging bot work' );
+        $ed_summ    = "Logging work";
+        if ( defined( 'WikiBot_Name' ) ) {
+            $ed_summ    .= ' of '.WikiBot_Name;
+        } else {
+            $ed_summ    .= ' of unnamed bot';
+        }
+        return self::write_page( Bot_LOG, $content, $ed_summ );
     }
 
     /**
@@ -323,7 +346,7 @@ class WikiBot {
      **/
      function logout() {
          self::DBGecho( "Logging out" );
-         if (Bot_LOG !== false ) var_dump($this->log_actions() );
+         if (Bot_LOG !== false ) var_dump( $this->log_actions() );
 
          $this->query( '?action=logout&format=php' );
      }
@@ -475,7 +498,7 @@ class WikiBot {
         $this->bot['readtime']  = 0; // Set this to time page retrieved if not
                                         // writing most-recently-read page.
 
-                                        $result = $this->query( $q, $post );
+        $result = $this->query( $q, $post );
         if ( isset($result['error']) ) {
             return self::ERR_ret( self::ERR_error, "API error, info:"
                 .$result['error']['info']
@@ -521,6 +544,43 @@ class WikiBot {
             }
         }
         return array_merge($toc, $toc_elem);
+    }
+
+    /**
+     *  Page links retrieving function
+     * @param $page Page to retrive links from
+     * @param $ns   Namespace of page (defaults to '0', main namespace),
+     *              can be numbers, or names, separated by | (pipe) if more than
+     *              one namespace to be seached.
+     * @return      Array of links from the specified page, or error.
+     **/
+    function get_links( $page, $ns = '0' ) {
+        self::DBGecho( "Retrieving links from page '".$page."' in namespace '".$ns."'" );
+        $links  = array();
+        $q  = '?action=query&format=php&prop=links&titles='
+                .urlencode( $page ).'&plnamespace='
+                .urlencode( $ns ).'&pllimit=500';
+        $r  = $this->query( $q );
+        if ( isset( $r['error'] ) ) {
+            return self::ERR_ret( self::ERR_error, "API error, info:"
+                .$result['error']['info']
+                ." Result:".$result['error']['code'] );
+        }
+        foreach ( $r['query']['pages'] as $list ) {
+            $links      = array_merge( $links, $list['links'] );
+        }
+        while ( isset( $r['query-continue'] ) ) {
+            $r  = $this->query( $q, $r['query-continue']['links'] );
+            if ( isset( $r['error'] ) ) {
+                return self::ERR_ret( self::ERR_error, "API error, info:"
+                    .$result['error']['info']
+                    ." Result:".$result['error']['code'] );
+            }
+            foreach ( $r['query']['pages'] as $list ) {
+                $links  = array_merge( $links, $list['links'] );
+            }
+        }
+        return $links;
     }
 }
 ?>

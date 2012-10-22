@@ -2,7 +2,7 @@
 /**
  *  Title:      Sandbox_Reset.php
  *  Author(s):  Brian McNeil ([[n:Brian McNeil]])
- *  Version:    0.1.0-0
+ *  Version:    1.0.0-0
  *  Date:       October 13, 2012
  *  Description:
  *      Basic function to reset the Wikinews sandbox if it has not been edited
@@ -15,27 +15,27 @@
  *                              Create: Straightforward bot process.
  **/
 
-define('CLASSPATH', '/home/wikinews/NewsieBot/classes/');
-require_once(CLASSPATH.'config.class.php');
+define( 'WikiBot_Name', "Sandbox cleaner v1.0" );
+define( 'CLASSPATH', '/home/wikinews/NewsieBot/classes/');
+
 require_once(CLASSPATH.'WikiBot.class.php');
 
 $newsiebot  = new WikiBot(mW_WIKI);
 $sandbox    = 'Wikinews:Sandbox';
 
 if (!$newsiebot) {
-    echo "Error initializing NewsieBot\r\n";
+    echo "Error initializing NewsieBot".CRLF;
 } else {
     $r = $newsiebot->login(mW_USER, mW_PASS);
     $newsiebot->quiet = false; // More-verbose logging
     if (!$r) {
-        echo "Failed to log in correctly\r\n";
+        echo "Failed to log in correctly".CRLF;
         return false;
     }
     // Fetch Sandbox page, and edit token.
     $page   = $newsiebot->get_page( $sandbox, true );
     $content    = '{{sandbox}}';
-    $newsiebot->runmsg  = $newsiebot->runmsg
-                        ."\r\n:: Check Sandbox";
+    $newsiebot->runmsg  = "Checking Sandbox";
     if ($page !== false ) {
         // MediaWiki timestamps look like: "2012-10-12T16:52:52Z"
         $timestamp  = $newsiebot->rev_time; // Grab the timestamp of current revision
@@ -43,20 +43,21 @@ if (!$newsiebot) {
         $sixHRS     = time() - 6 * 60 * 60;
         $compdate   = gmdate( 'Y-m-d', $sixHRS ).'T'.gmdate( 'H:i:s', $sixHRS ).'Z';
         if ( !$newsiebot->quiet ) { // If being 'noisy', show the timestamps in log
-            echo "Page timestamp:$timestamp \r\n";
-            echo "Rset timestamp:$compdate \r\n";
+            echo "Page timestamp:$timestamp".CRLF;
+            echo "Rset timestamp:$compdate".CRLF;
         }
         // Last edit older than compare date? Page not 'pristine'?
         if ( ( strcmp( $compdate, $timestamp ) > 0 ) && ( strcmp( $page, $content ) !== 0 ) ) {
             // Time to reset the sandbox...
             $r  = $newsiebot->write_page( $sandbox, $content, "Clear sandbox, untouched for six hours" );
             if ( $r !== false ) {
-                echo "Sandbox reset.\r\n";
-                $newsiebot->runmsg  = $newsiebot->runmsg
-                                    ."\r\n:: RESET Sandbox";
+                echo "Sandbox reset.";
+                $newsiebot->runmsg  = " RESET Sandbox";
             }
-
         }
+    } else {
+        $newsiebot->runmsg  = "* ERROR retrieving Sandbox";
     }
+    return $newsiebot->logout();
 }
 ?>

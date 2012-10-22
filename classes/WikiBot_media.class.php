@@ -84,10 +84,15 @@ class WikiBot_media extends WikiBot {
         }
     }
 
-    function media_uploader( $name ) {
-        parent::DBGecho( "Finding media file's uploader for '".$name."'" );
+    /**
+     * Find out the uploader of a media file
+     * @param $media    Name of the media file
+     * @return          The username of who uploaded the file
+     **/
+    function media_uploader( $media ) {
+        parent::DBGecho( "Finding media file's uploader for '".$media."'" );
         $q  = '?action=query&format=php&prop=imageinfo&titles='
-            .urlencode($name).'&iilimit=1&iiprop=user';
+            .urlencode( $media ).'&iilimit=1&iiprop=user';
         $r  = parent::query_api( $q );
         foreach ( $r['query']['pages'] as $pg ) {
             if ( isset( $pg['imageinfo'][0]['user'] ) ) {
@@ -97,11 +102,45 @@ class WikiBot_media extends WikiBot {
             }
         }
         if ( isset( $r['error'] ) ) {
-            return self::ERR_ret( parent::ERR_error, "API error, info:"
+            return parent::ERR_ret( parent::ERR_error, "API error, info:"
                 .$r['error']['info']
                 ." Result:".$r['error']['code'] );
         }
     }
 
+    /**
+     * Used media function, builds list of images and other media used in
+     * a page.
+     * @param $page Name of page to retrieve media for
+     * @return      An array containing all used media on the page
+     **/
+    function used_media( $page ) {
+        parent::DBGecho( "Finding all used media on page '".$page."'" );
+        $list   = array();
+        $q  = '?action=query&format=php&prop=images&titles='
+            .urlencode( $page ).'&imlimit=500';
+        $r  = parent::query_api( $q );
+        var_dump( $r );
+        if ( isset( $r['error'] ) ) {
+            return parent::ERR_ret( parent::ERR_error, "API error, info:"
+                .$r['error']['info']
+                ." Result:".$r['error']['code'] );
+        }
+        foreach ( $r['query']['pages'] as $pg ) {
+            $list   = array_merge( $list, $pg['images'] );
+        }
+        while ( isset( $r['query-continue'] ) ) {
+            $r  = parent::query_api( $q, $r['query-continue']['images'] );
+            if ( isset( $r['error'] ) ) {
+                return parent::ERR_ret( parent::ERR_error, "API error, info:"
+                    .$r['error']['info']
+                    ." Result:".$r['error']['code'] );
+            }
+            foreach ( $r['query']['pages'] as $pg ) {
+                $list   = array_merge( $list, $pg['images'] );
+            }
+        }
+        return $list;
+    }
 }
 ?>

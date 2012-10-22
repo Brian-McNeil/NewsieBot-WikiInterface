@@ -44,12 +44,12 @@ if (!$newsiebot) {
     $loc    = $newsiebot->media_location( "File:Example.png" );
     var_dump( $loc );
 
-    echo "Getting file location".CRLF;
-    $loc    = $newsiebot->media_location( "File:Nonexistent-file-requested.png" );
-    var_dump( $loc );
+//    echo "Getting file location".CRLF;
+//    $loc    = $newsiebot->media_location( "File:Nonexistent-file-requested.png" );
+//    var_dump( $loc );
 
-    echo "Testing link retrieval".CRLF;
-    $x  = $newsiebot->get_links( "Main Page" );
+    echo "Testing image retrieval".CRLF;
+    $x  = $newsiebot->used_media( "Main Page" );
     var_dump( $x );
 
     echo "Logging out".CRLF;

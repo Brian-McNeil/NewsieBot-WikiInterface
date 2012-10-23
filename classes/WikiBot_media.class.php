@@ -2,7 +2,7 @@
 /**
  *  Title:      WikiBot_media.class.php
  *  Author(s):  Brian McNeil ([[n:Brian McNeil]])
- *  Version:    0.0.0-1
+ *  Version:    0.0.0-2
  *  Date:       October 20, 2012
  *  Description:
  *      Class to extend the basic WikiBot.class.php with a range of functions
@@ -21,7 +21,7 @@ require_once(CLASSPATH.'WikiBot.class.php');
 
 class WikiBot_media extends WikiBot {
 
-    const Version       = "WikiBot_media.class v0.0.0-2";
+    const Version    = "WikiBot_media.class v0.0.0-2";
 
     /**
      * Constructor function; simply calls parent constructor
@@ -46,8 +46,8 @@ class WikiBot_media extends WikiBot {
         } else {
             $rmsg   = CRLF.'# Unnamed bot using ';
         }
-        $this->bot['runmsg']    = $rmsg.self::Version.CRLF
-                                .'#:: Start: '.gmdate( 'Y-m-d H:i:m' );
+        $this->Rrunmsg  = $rmsg.self::Version
+                        .CRLF.'#:: Start, '.gmdate( 'Y-m-d H:i:m' );
         return $result;
 
     }
@@ -61,12 +61,28 @@ class WikiBot_media extends WikiBot {
     }
 
     /**
+     *  Wiki login function. Calls parent login, then sets request timeout
+     *  length to 1 hour, as-required for large media file uploads
+     * @param $user     Username to log in with
+     * @param $pass     Password for the user
+     * @return          False if fails, or array of data from the API if succeeds
+     **/
+    public function login( $user = null, $pass = null ) {
+        $r  = parent::login( $user, $pass );
+
+        if ( $r !== false ) {
+            $this->request_timeout( 3600 );
+        }
+        return $r;
+    }
+
+    /**
      * Retrieve a media file's actual location.
      * @param $name The "File:" page on the wiki which the URL of is desired.
      * @return      The URL pointing directly to the media file
      *              (Eg http://upload.mediawiki.org/wikipedia/en/1/1/Example.jpg)
      **/
-    function media_location ( $name ) {
+    public function media_location ( $name ) {
         parent::DBGecho( "Retrieving location of media '".$name."'" );
         $q  = '?action=query&format=php&prop=imageinfo&titles='
             .urlencode($name).'&iilimit=1&iiprop=url';
@@ -89,9 +105,9 @@ class WikiBot_media extends WikiBot {
      * @param $media    Name of the media file
      * @return          The username of who uploaded the file
      **/
-    function media_uploader( $media ) {
+    public function media_uploader( $media ) {
         parent::DBGecho( "Finding media file's uploader for '".$media."'" );
-        $q  = '?action=query&format=php&prop=imageinfo&titles='
+        $q  = '&prop=imageinfo&titles='
             .urlencode( $media ).'&iilimit=1&iiprop=user';
         $r  = parent::query_api( $q );
         foreach ( $r['query']['pages'] as $pg ) {
@@ -103,8 +119,7 @@ class WikiBot_media extends WikiBot {
         }
         if ( isset( $r['error'] ) ) {
             return parent::ERR_ret( parent::ERR_error, "API error, info:"
-                .$r['error']['info']
-                ." Result:".$r['error']['code'] );
+                .$r['error']['info']." Result:".$r['error']['code'] );
         }
     }
 
@@ -114,31 +129,27 @@ class WikiBot_media extends WikiBot {
      * @param $page Name of page to retrieve media for
      * @return      An array containing all used media on the page
      **/
-    function used_media( $page ) {
+    public function used_media( $page ) {
         parent::DBGecho( "Finding all used media on page '".$page."'" );
         $list   = array();
-        $q  = '?action=query&format=php&prop=images&titles='
+        $q  = '&prop=images&titles='
             .urlencode( $page ).'&imlimit=500';
         $r  = parent::query_api( $q );
-        var_dump( $r );
         if ( isset( $r['error'] ) ) {
             return parent::ERR_ret( parent::ERR_error, "API error, info:"
-                .$r['error']['info']
-                ." Result:".$r['error']['code'] );
+                .$r['error']['info']." Result:".$r['error']['code'] );
         }
-        foreach ( $r['query']['pages'] as $pg ) {
+        foreach ( $r['query']['pages'] as $pg )
             $list   = array_merge( $list, $pg['images'] );
-        }
+
         while ( isset( $r['query-continue'] ) ) {
             $r  = parent::query_api( $q, $r['query-continue']['images'] );
             if ( isset( $r['error'] ) ) {
                 return parent::ERR_ret( parent::ERR_error, "API error, info:"
-                    .$r['error']['info']
-                    ." Result:".$r['error']['code'] );
+                    .$r['error']['info']." Result:".$r['error']['code'] );
             }
-            foreach ( $r['query']['pages'] as $pg ) {
+            foreach ( $r['query']['pages'] as $pg )
                 $list   = array_merge( $list, $pg['images'] );
-            }
         }
         return $list;
     }

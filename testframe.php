@@ -29,7 +29,7 @@ if (!$newsiebot) {
 
     $sectxt = $newsiebot->get_section( $pg, '2', true );
     echo "Tried pulling 2nd section; content:".CRLF;
-    var_dump($sectxt);
+//    var_dump($sectxt);
 
     $sectxt     .= CRLF."::* Ignore me, I'm just a bot trying something out --~~~~";
 //    $write = $newsiebot->write_section( $pg, $sectxt, '2' );
@@ -42,7 +42,7 @@ if (!$newsiebot) {
 
     echo "Getting file location".CRLF;
     $loc    = $newsiebot->media_location( "File:Example.png" );
-    var_dump( $loc );
+//    var_dump( $loc );
 
 //    echo "Getting file location".CRLF;
 //    $loc    = $newsiebot->media_location( "File:Nonexistent-file-requested.png" );
@@ -50,9 +50,9 @@ if (!$newsiebot) {
 
     echo "Testing image retrieval".CRLF;
     $x  = $newsiebot->used_media( "Main Page" );
-    var_dump( $x );
+//    var_dump( $x );
 
-    echo "Logging out".CRLF;
+    echo "Calling logout".CRLF;
     $newsiebot->logout();
 }
 ?>

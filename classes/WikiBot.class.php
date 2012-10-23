@@ -31,7 +31,7 @@ require_once(CLASSPATH.'HTTPcurl.class.php');
  **/
 class WikiBot {
 
-    const Version       = "WikiBot.class v0.1.0-0";
+    const Version    = "WikiBot.class v0.1.0-0";
     // For safety, should user mangle data for wiki, the test
     // wiki is set as a default and the path to the API is as-per
     // the usual default for a 'vanilla' MediaWiki install.
@@ -58,8 +58,6 @@ class WikiBot {
      * @return          True/False depending on success.
      **/
     function __construct($wiki_url=self::DEFAULT_wiki, $wiki_api=self::DEFAULT_api, $ht_user=null, $ht_pass=null, $quiet=true ) {
-        $r  = array();
-
         // Create a cURL instance for exclusive use by the bot
         $r  = $this->init_cURL( $wiki_url, $wiki_api);
         if ($r == false) {
@@ -71,11 +69,11 @@ class WikiBot {
         }
         // Revision ID/Page will be tracked to allow bots to detect
         // edit conflicts.
-        $r['revid']     = null;
-        $r['pagetitle'] = null;
-        $r['rev_time']  = null;
+        $r['revid']     = '';
+        $r['pagetitle'] = '';
+        $r['rev_time']  = 0;
         // Default behaviours - These reset on every page write!
-        $r['bot']               = true; // We're a bot
+        $r['botproc']           = true; // We're a bot
         $r['minor']             = false; // We don't make minor edits
         $r['conflict']          = true; // Respect edit conflicts
         $r['newpage']           = false; // Not writing new page unless say so
@@ -89,10 +87,34 @@ class WikiBot {
         } else {
             $rmsg   = CRLF.'# Unnamed bot using ';
         }
-        $r['runmsg']    = $rmsg.self::Version.CRLF
-                        .'#:: Start: '.gmdate( 'Y-m-d H:i:m' );
+        $r['runmsg']    = $rmsg.self::Version
+                        .CRLF.'#:: Start: '.gmdate( 'Y-m-d H:i:m' );
         $this->bot  = $r;
         return self::ERR_ret( self::ERR_success, "Initialised bot class" );
+    }
+
+    /**
+     * Configuration function, creates, and returns, the cURL instance
+     * @return      false if fails, otherwise an array holding
+     *              the cURL instance and the wiki's API URL
+     **/
+    private function init_cURL( $wiki, $api ) {
+        $r  = array();
+        if ( defined('WikiBot_Name') ) {
+            $useragent  = "Bot ".WikiBot_Name." using ".self::Version;
+        } else {
+            $useragent  = "Unnamed bot using ".self::Version;
+        }
+        $r['cURL']  = new HTTPcurl( $useragent );
+
+        if ( !$r['cURL'] ) {
+            return false;
+        }
+        $r['URL']       = $wiki.$api;
+        $r['token']     = '';
+        $r['timestamp'] = 0;
+        $r['cURL']->param['quiet']  = false; // try to make noisy
+        return $r;
     }
 
     /**
@@ -100,7 +122,7 @@ class WikiBot {
      * @return      void
      **/
     function __destruct() {
-        self::DBGecho( "Tearing down bot instance" );
+        self::DBGecho( "END: Tearing down WikiBot instance" );
         unset($this->bot);
     }
 
@@ -137,7 +159,7 @@ class WikiBot {
      * @return          True if successful, false if fails
      **/
      public function __set( $var, $value ) {
-         self::DBGecho( "Request to set variable: $var to '$value'" );
+         self::DBGecho( "START:: __set('$var','$value')" );
          if ( $var == 'cURL' || $var == 'credentials' ) {
             return self::ERR_ret( self::ERR_error, "Setting protected variable outside object creation not permitted." );
          }
@@ -149,11 +171,17 @@ class WikiBot {
              $this->bot['runmsg']   = $this->bot['runmsg'].CRLF.'#:'.$value;
              return true;
          }
+         // Another special case; Rrunmsg is "reset runmsg" this being used
+         // by child classes to identify themselves in the log.
+         if ( $var == 'Rrunmsg' ) {
+             $this->bot['runmsg']   = $value;
+             return true;
+         }
          if ( isset( $this->bot[$var] ) ) {
              $this->bot[$var]   = $value;
              return true;
          } else {
-             return self::ERR_ret( self::ERR_warn, "Request to set undefined object variable for WikiBot class." );
+             return self::ERR_ret( self::ERR_warn, "Request to set undefined object variable '$var' for WikiBot class." );
          }
 
      }
@@ -186,87 +214,13 @@ class WikiBot {
     }
 
     /**
-     * Configuration function, creates, and returns, the cURL instance
-     * @return      false if fails, otherwise an array holding
-     *              the cURL instance and the wiki's API URL
-     **/
-    private function init_cURL( $wiki, $api ) {
-        $r  = array();
-        $r['cURL']  = new HTTPcurl();
-
-        if ( !$r['cURL'] ) {
-            return false;
-        }
-        $r['URL']       = $wiki.$api;
-        $r['token']     = null;
-        $r['timestamp'] = null;
-        $r['cURL']->param['quiet']  = false; // try to make noisy
-        return $r;
-    }
-
-    /**
-     * 'Raw' query function; sends a query to the target MediaWiki instance
-     *  with the assumption the relevant API string is in-place.
-     * @param $query    Passed-in query string (eg '&prop=revisions&title=Foo')
-     * @param $postdata Optional data to go by POST method
-     * @return          False if fails, or unserialized result data
-     **/
-    private function query( $query, $postdata = null ) {
-        self::DBGecho( "Doing query: '".$query."'" );
-        $r  = null;
-        $wURL   = $this->URL;
-        if ($postdata == null ) {
-            self::DBGecho( "    Request type: GET" );
-            $r  = $this->bot['cURL']->http_get($wURL.$query);
-        } else {
-            self::DBGecho( "    Request type: POST" );
-            $r  = $this->bot['cURL']->http_post($wURL.$query, $postdata);
-        }
-        if (!$r) {
-            return self::ERR_ret( self::ERR_fatal, "Error with cURL initialization" );
-        }
-        return unserialize($r);
-    }
-
-    /**
-     * Function to try and log the bot's actions
-     * @return      Can be discarded
-     **/
-    private function log_actions() {
-        self::DBGecho ("Logging bot's work" );
-        $pg         = $this->get_page( Bot_LOG, true );
-        if ( $pg == false )     return false;   // Can't load log page? Bail out.
-        $content    = $this->bot['runmsg']
-                    .CRLF."#:: End: ".gmdate( 'Y-m-d H:i:m' )
-                    .$pg;
-        $lines = substr_count( $content, "# " );
-        echo "Lines of log:".$logged.CRLF;
-        if ( $lines > Bot_LGMAX ) {
-            echo "Need to trim the log".CRLF;
-            // Have more items logged than limit, work back to limit
-            while ( $lines-- > Bot_LGMAX && $ptr = strrpos( $content, "# " ) ) {
-                $content         = substr( $content, 0, $ptr );
-            }
-        }
-        $this->bot['minor']     = true;
-        $this->bot['conflict']  = false;
-        $ed_summ    = "Logging work";
-        if ( defined( 'WikiBot_Name' ) ) {
-            $ed_summ    .= ' of '.WikiBot_Name;
-        } else {
-            $ed_summ    .= ' of unnamed bot';
-        }
-        return self::write_page( Bot_LOG, $content, $ed_summ );
-    }
-
-    /**
      * API query function; sends a query to the target MediaWiki using the API
      * @param $query    Passed-in query string (eg '&prop=revisions&title=Foo')
      * @param $postdata Optional data to go by POST method
      * @return          False if fails, or unserialized result data
      **/
     function query_api( $query, $postdata = null ) {
-        self::DBGecho( "API query of: '$query'" );
+        self::DBGecho( "START: query_api('$query')" );
         $q  = self::API_qry.$query;
         return self::query( $q, $postdata );
     }
@@ -278,9 +232,73 @@ class WikiBot {
      * @return          False if fails, or unserialized result data
      **/
     function query_content( $query, $postdata = null ) {
-        self::DBGecho( "Content request of: '$query'") ;
+        self::DBGecho( "START: query_content('$query')") ;
         $q  = self::API_parse.$query;
         return self::query( $q, $postdata );
+    }
+
+    /**
+     * 'Raw' query function; sends a query to the target MediaWiki instance
+     *  with the assumption the relevant API string is in-place.
+     * @param $query    Passed-in query string (eg '&prop=revisions&title=Foo')
+     * @param $postdata Optional data to go by POST method
+     * @return          False if fails, or unserialized result data
+     **/
+    private function query( $query, $postdata = null ) {
+        self::DBGecho( "START: query('$query')" );
+        $r  = null;
+        $wURL   = $this->URL;
+        if ($postdata == null ) {
+            self::DBGecho( "    Request type: GET" );
+            $r  = $this->bot['cURL']->HTTP_get( $wURL.$query );
+        } else {
+            self::DBGecho( "    Request type: POST" );
+            $r  = $this->bot['cURL']->HTTP_post( $wURL.$query, $postdata );
+        }
+        if ( !$r ) {
+            return self::ERR_ret( self::ERR_fatal, "Error with cURL initialization" );
+        }
+        return unserialize($r);
+    }
+
+    /**
+     * Function to try and log the bot's actions
+     * @return      Can be discarded
+     **/
+    private function log_actions() {
+        self::DBGecho( "START: log_actions()" );
+        $pg         = self::get_page( Bot_LOG, true );
+        if ( $pg === false )
+            return false;   // Can't load log page? Bail out.
+        $content    = $this->bot['runmsg']
+                    .CRLF."#:: End: ".gmdate( 'Y-m-d H:i:m' )
+                    .$pg;
+        $lines = substr_count( $content, "# " );
+        if ( $lines > Bot_LGMAX ) {
+            // Have more items logged than limit, work back to limit
+            while ( $lines-- > Bot_LGMAX && $ptr = strrpos( $content, "# " ) ) {
+                $content         = substr( $content, 0, $ptr );
+            }
+        }
+        $this->minor    = true;
+        $this->conflict = false;
+        $ed_summ    = "Logging work";
+        if ( defined( 'WikiBot_Name' ) ) {
+            $ed_summ    .= ' of '.WikiBot_Name;
+        } else {
+            $ed_summ    .= ' of unnamed bot';
+        }
+        return self::write_page( Bot_LOG, $content, $ed_summ );
+    }
+
+    /**
+     *  Set the HTTP request timeout in the cURL object
+     * @param $seconds  Timeout value in seconds, default 60
+     * @return          Returns value from cURL object's req_timeout method
+     **/
+    function request_timeout( $seconds = 60 ) {
+        self::DBGecho( "START: request_timeout('$seconds')" );
+        return $this->bot['cURL']->req_timeout( $seconds );
     }
 
     /***********************************
@@ -293,8 +311,8 @@ class WikiBot {
      * @param $pass     Password for the user
      * @return          False if fails, or array of data from the API if succeeds
      **/
-    function login( $user = null, $pass = null ) {
-        self::DBGecho( "Logging in, User:$user" );
+    public function login( $user = null, $pass = null ) {
+        self::DBGecho( "START: login('$user')" );
         $q          = '?action=login&format=php';
 
         // If the username is passed in, then we use what we're given
@@ -315,12 +333,12 @@ class WikiBot {
             }
         }
         // Start trying to log in...
-        $r  = $this->query( $q, $postdata );
+        $r  = self::query( $q, $postdata );
         if (isset($r['login']['result'])) {
             // Token required in more-recent MediaWiki versions
             if ($r['login']['result'] == 'NeedToken') {
                 $postdata['lgtoken']    = $r['login']['token'];
-                $r  = $this->query( $q, $postdata );
+                $r  = self::query( $q, $postdata );
             }
         } else {
             return self::ERR_ret( self::ERR_fatal, "Login failed; no result returned" );
@@ -336,7 +354,7 @@ class WikiBot {
             return self::ERR_ret( self::ERR_fatal, "Login failed; no result returned" );
         }
 
-        // Should never execute, but if does ensure is a failure result
+        // Should never execute, but if does, ensure is a failure result
         return self::ERR_ret( self::ERR_error, "Unknown error logging ine" );
     }
 
@@ -344,11 +362,12 @@ class WikiBot {
      *  Logout function
      * @return          Falls out, thus returning null
      **/
-     function logout() {
-         self::DBGecho( "Logging out" );
-         if (Bot_LOG !== false ) var_dump( $this->log_actions() );
-
-         $this->query( '?action=logout&format=php' );
+     public function logout() {
+         self::DBGecho( "START: logout()" );
+         if (Bot_LOG !== false ) {
+             self::log_actions();
+         }
+         self::query( '?action=logout&format=php' );
      }
 
     /**
@@ -361,7 +380,7 @@ class WikiBot {
      * @param $revid    The revision ID (optional) to be fetched
      * @return          False if fails, or wikitext of desired page
      **/
-    function get_section( $page, $section, $gettoken = false, $revid = null ) {
+    public function get_section( $page, $section, $gettoken = false, $revid = null ) {
         return self::get_page( $page, $gettoken, $revid, $section );
     }
 
@@ -374,11 +393,11 @@ class WikiBot {
      * @param $section  When a section of a page is required, pass section number
      * @return          False if fails, or wikitext of desired page
      **/
-    function get_page( $page, $gettoken = false, $revid = null, $section = null ) {
+    public function get_page( $page, $gettoken = false, $revid = null, $section = null ) {
         if ( $section === null ) {
-            self::DBGecho( "Fetching page: '$page'" );
+            self::DBGecho( "START: get_page('$page')" );
         } else {
-            self::DBGecho( "Fetching section number $section from: '$page'" );
+            self::DBGecho( "START: get_section('$page','$section')" );
         }
 
         // If asked for an edit token when fetching page, query differs
@@ -398,21 +417,21 @@ class WikiBot {
         if ( $section !== null )
             $q  .= '&rvsection='.$section;
 
-        $r  = $this->query_api( $q );
+        $r  = self::query_api( $q );
         if (!$r) {
             return self::ERR_ret( self::ERR_fatal, "No data returned by MediaWiki API" );
         }
 
         foreach ( $r['query']['pages'] as $t_page ) {
             // Now, stash page fetched and the revision ID.
-            $this->bot['pagetitle'] = $page;
-            $this->bot['rev_time']  = $t_page['revisions'][0]['timestamp'];
-            $this->bot['revid']     = $t_page['revisions'][0]['revid'];
+            $this->pagetitle    = $page;
+            $this->rev_time     = $t_page['revisions'][0]['timestamp'];
+            $this->revid        = $t_page['revisions'][0]['revid'];
 
             // Save details of the edit token and the 'edit' start timestamp
             if ( $gettoken !== false ) {
-                $this->bot['token']     = $t_page['edittoken'];
-                $this->bot['timestamp'] = $t_page['starttimestamp'];
+                $this->token        = $t_page['edittoken'];
+                $this->timestamp    = $t_page['starttimestamp'];
             }
             // Return the wiki-markup page content
             return $t_page['revisions'][0]['*'];
@@ -432,7 +451,7 @@ class WikiBot {
      * @param $summary  Edit summary, or new section name
      * @return          False if fails, otherwise the data returned by the API.
      **/
-    function write_section( $title, $content, $section = 'new', $summary = null ) {
+    public function write_section( $title, $content, $section = 'new', $summary = null ) {
         return self::write_page( $title, $content, $summary, $section );
     }
 
@@ -450,20 +469,24 @@ class WikiBot {
      * @param $section  A numeric string for section number to edit or 'new' to append new
      * @return          False if fails, otherwise the data returned by the API.
      **/
-    function write_page( $title, $content, $summary = null, $section = null ) {
-        self::DBGecho( "Writing to page: '$title'" );
+    public function write_page( $title, $content, $summary = null, $section = null ) {
+        if ( $section === null ) {
+            self::DBGecho( "START write_page('$title')" );
+        } else {
+            self::DBGecho( "START: write_section('$title', '$section')" );
+        }
         $q      = '?action=edit&format=php';
         $post   = array(
                 'title'                             => $title,
                 'summary'                           => $summary,
-                ($this->bot?'bot':'notbot')         => true,
+                ($this->botproc?'bot':'notbot')     => true,
                 ($this->minor?'minor':'notminor')   => true
                 );
 
         // Grab timestamp, even if not going to use it later.
         $e_timestamp    = $this->rev_time;
         if ( $this->readtime !== 0 ) {
-            $e_timestamp    = $r_time;
+            $e_timestamp    = $this->readtime;
         } elseif ( !$this->newpage ) {
             // Null timestamp, must be editing last-page retrieved if $new not true
             if ( $this->pagetitle !== $title ) {
@@ -487,24 +510,47 @@ class WikiBot {
             $post['sectiontitle']   = $summary;
         }
 
-        $post['text']   = $content;
-        $post['token']  = $this->token;
+        $post['text']           = $content;
+        $post['token']          = $this->token;
+        $post['starttimestamp'] = $this->timestamp;
 
         // Default behaviours - These reset on every page write!
-        $this->bot['bot']       = true; // We're a bot
-        $this->bot['minor']     = false; // We don't make minor edits
-        $this->bot['conflict']  = true; // Respect edit conflicts
-        $this->bot['newpage']   = false; // Not writing new page unless say so
-        $this->bot['readtime']  = 0; // Set this to time page retrieved if not
-                                        // writing most-recently-read page.
+        $this->botproc  = true; // We're a bot
+        $this->minor    = false; // We don't make minor edits
+        $this->conflict = true; // Respect edit conflicts
+        $this->newpage  = false; // Not writing new page unless say so
+        $this->readtime = 0;
 
-        $result = $this->query( $q, $post );
+        $result = self::query( $q, $post );
         if ( isset($result['error']) ) {
             return self::ERR_ret( self::ERR_error, "API error, info:"
-                .$result['error']['info']
-                ." Result:".$result['error']['code'] );
+                .$result['error']['info']." Result:".$result['error']['code'] );
         }
         return $result;
+    }
+
+    /**
+     * Function to get a page's unique ID.
+     * @param $page Title of the page to retrieve ID of
+     * @return      Returns page ID or an error
+     **/
+    public function get_pageid( $page ) {
+        self::DBGecho( "START: get_pageid('$page')" );
+        if ( $this->pagetitle == $page )
+            return $this->revid; // Can avoid API call as page retrieved
+
+        $q  = '&prop=revisions&titles='
+            .urlencode( $page ).'&rvlimit=1&rvprop=content';
+        $r  = self::query_api( $q );
+        if ( isset( $r['error'] ) ) {
+            return self::ERR_ret( self::ERR_error, "API returned error, info:"
+                .$r['error']['info']." Result ".$r['error']['code'] );
+        }
+        foreach ( $r['query']['pages'] as $info ) {
+            return $info['pageid'];
+        }
+        // Shouldn't end up here, but...
+        return self::ERR_ret( self::ERR_error, "Unknown error retrieving page ID" );
     }
 
     /**
@@ -514,7 +560,7 @@ class WikiBot {
      * @return          False if fails, or the TOC in an array.
      *                  Note failure only if no page.
      **/
-    function get_toc( $page, $revid = null ) {
+    public function get_toc( $page, $revid = null ) {
         $toc    = array();
         $toc[] = array( // This is the element layout as-per MediaWiki
             'toclevel'      => 0,
@@ -526,24 +572,24 @@ class WikiBot {
             'byteoffset'    => 0,
             'anchor'        => ''
             );
-        self::DBGecho( "Fetching TOC for: '$page'" );
+        self::DBGecho( "START get_toc('$page')" );
 
         $q  = '&prop=sections&page='.urlencode($page);
         if ( $revid !== null )
             $q  .= '&rvstartid='.$revid;
 
-        $r  = $this->query_content( $q );
+        $r  = self::query_content( $q );
         if ( isset($r['error']) ) { // Error getting any page data
             return self::ERR_ret( self::ERR_error, "API error, info:"
                 .$result['error']['info']." Result:".$result['error']['code'] );
         }
         $toc_elem   = $r['parse']['sections'];
         if ( empty($toc_elem) ) { // Empty, does that mean page doesn't exist?
-            if ( $this->get_page( $page ) == false) {
+            if ( self::get_page( $page ) == false) {
                 return self::ERR_ret( self::ERR_warn, "Requested TOC for nonexistent page" );
             }
         }
-        return array_merge($toc, $toc_elem);
+        return array_merge( $toc, $toc_elem );
     }
 
     /**
@@ -554,31 +600,28 @@ class WikiBot {
      *              one namespace to be seached.
      * @return      Array of links from the specified page, or error.
      **/
-    function get_links( $page, $ns = '0' ) {
-        self::DBGecho( "Retrieving links from page '".$page."' in namespace '".$ns."'" );
+    public function get_links( $page, $ns = '0' ) {
+        self::DBGecho( "START: get_links('$page', '$ns')" );
         $links  = array();
-        $q  = '?action=query&format=php&prop=links&titles='
+        $q  = '&prop=links&titles='
                 .urlencode( $page ).'&plnamespace='
                 .urlencode( $ns ).'&pllimit=500';
-        $r  = $this->query( $q );
+        $r  = self::query_api( $q );
         if ( isset( $r['error'] ) ) {
             return self::ERR_ret( self::ERR_error, "API error, info:"
-                .$result['error']['info']
-                ." Result:".$result['error']['code'] );
+                .$result['error']['info']." Result:".$result['error']['code'] );
         }
-        foreach ( $r['query']['pages'] as $list ) {
+        foreach ( $r['query']['pages'] as $list )
             $links      = array_merge( $links, $list['links'] );
-        }
+
         while ( isset( $r['query-continue'] ) ) {
-            $r  = $this->query( $q, $r['query-continue']['links'] );
+            $r  = self::query_api( $q, $r['query-continue']['links'] );
             if ( isset( $r['error'] ) ) {
                 return self::ERR_ret( self::ERR_error, "API error, info:"
-                    .$result['error']['info']
-                    ." Result:".$result['error']['code'] );
+                    .$result['error']['info']." Result:".$result['error']['code'] );
             }
-            foreach ( $r['query']['pages'] as $list ) {
+            foreach ( $r['query']['pages'] as $list )
                 $links  = array_merge( $links, $list['links'] );
-            }
         }
         return $links;
     }

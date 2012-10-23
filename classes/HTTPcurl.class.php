@@ -26,7 +26,8 @@ if ( !defined('CRLF') ) {
 
 class HTTPcurl {
 
-    static $version             = "HTTPcurl.class v0.1.0-0";
+    const Version    = "HTTPcurl.class v0.1.0-0";
+
     const   connect_timeout     = 10;
     const   response_timeout    = 60; // This will need bumped up a great deal if uploading large files
     const   max_connects        = 100;
@@ -44,8 +45,11 @@ class HTTPcurl {
         $this->param    = $this->init_public_parameters();
         $curl_obj       = $this->init_curl_parameters();
 
-        if ( $agent_str !== null )
-            $this->param['useragent']   = self::$version." - ".$agent_str;
+        if ( $agent_str !== null ) {
+            $this->param['useragent']   = self::Version." - ".$agent_str;
+        } else {
+            $this->param['useragent']   = self::Version." - used by unknown caller";
+        }
 
         if ( $curl_obj !== false ) {
             $this->c_data   = $curl_obj;
@@ -79,7 +83,7 @@ class HTTPcurl {
         $rp['jar_id']   = dechex(rand(0, 999999999));
         $rp['post_followredir'] = false;
         $rp['get_followredir']  = true;
-        $rp['useragent']        = self::$version." User:NewsieBot";
+        $rp['useragent']        = " WikiBot php framework using".self::Version;
         $rp['quiet']            = true;
         $rp['timeout_connect']  = self::connect_timeout;
         $rp['timeout_response'] = self::response_timeout;
@@ -142,14 +146,14 @@ class HTTPcurl {
      *  Function to store HTTP-Auth user/pass
      * @param $username     Username for Auth
      * @param $password     Password for Auth
-     * @return              Returns void
+     * @return              Returns true if parameters successfully set
      **/
     public function HTTP_auth( $username, $password ) {
         $c_pars = array(
                 CURLOPT_HTTPAUTH        => CURLAUTH_BASIC,
                 CURLOPT_USRERPWD        => $username.":".$password
             );
-        $this->set_curl_params( $c_pars );
+        return self::set_curl_params( $c_pars );
     }
 
     /**
@@ -158,7 +162,7 @@ class HTTPcurl {
      * @param $data         Data to be sent via POST method
      * @return              Returns the data provided by cURL
      **/
-    public function http_post($url, $data) {
+    public function HTTP_post( $url, $data ) {
         $stime = microtime(1);
         $c_pars = array(
                 CURLOPT_URL             => $url,
@@ -181,7 +185,7 @@ class HTTPcurl {
      * @param $url          The URL for the GET
      * @return              Data returned from cURL
      **/
-    public function http_get($url) {
+    public function HTTP_get($url) {
         $stime = microtime(1);
         $c_pars = array(
                 CURLOPT_URL             => $url,
@@ -197,6 +201,19 @@ class HTTPcurl {
         if (!$this->param['quiet'] )
             echo "GET: $url (".(microtime(1) - $stime)." sec) ".strlen($data)." bytes\r\n";
         return $r_data;
+    }
+
+    /**
+     *  Function to tweak the timeout on a response; required for large media uploads
+     * @param $seconds  Time which a response to a request will be waited for
+     * @return          True if parameter successfully set in the cURL instance
+     **/
+    public function req_timeout( $seconds = 60 ) {
+        $this->param['timeout_response']    = $seconds;
+        $c_pars = array(
+                CURLOPT_TIMEOUT     => $seconds
+            );
+        return self::set_curl_params( $c_pars );
     }
 
     /**

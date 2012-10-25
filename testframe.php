@@ -32,6 +32,7 @@ if (!$newsiebot) {
     $x  = $newsiebot->get_used_media( "Main Page" );
     if ( $x !== false )
         $newsiebot->runmsg  = "Successfully retrieved used media for Main Page";
+    var_dump( $x );
 
     $u  = $newsiebot->upload_media( "File:Static.gif",
                         "/home/wikinews/NewsieBot/static.gif",
@@ -48,9 +49,9 @@ if (!$newsiebot) {
         $newsiebot->runmsg  = "Got pages linked-to from Main Page";
     var_dump( $list );
 
-    $list   = $newsiebot->get_links_here( 'Wikinews:Newsroom' );
+    $list   = $newsiebot->get_links_here( 'Talk:Main Page' );
     if ( $list !== false )
-        $newsiebot->runmsg  = "Got pages linking to 'Wikinews:Newsroom'";
+        $newsiebot->runmsg  = "Got pages linking to 'Talk:Main Page'";
     var_dump( $list );
 
     $list   = $newsiebot->get_template_pages( 'United Kingdom' );

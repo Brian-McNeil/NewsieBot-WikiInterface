@@ -40,8 +40,17 @@ class WikiBot {
     const API_qry       = '?action=query&format=php';
     const API_parse     = '?action=parse&format=php';
     const Main_Page     = 'Main Page';
-    const MW_Template   = 'Template:';
-    const MW_Category   = 'Category:';
+
+    const NS_Media      = 'Media';
+    const NS_Special    = 'Special';
+    const NS_Main       = '';
+    const NS_Talk       = 'Talk';
+    const NS_User       = 'User';
+    const NS_User_talk  = 'User talk';
+    const NS_Project    = 'Project';
+    const NS_Project_talk = 'Project talk';
+    const NS_Template   = 'Template';
+    const NS_Category   = 'Category';
 
     const ERR_fatal     = 'fatal';
     const ERR_error     = 'error';
@@ -161,7 +170,7 @@ class WikiBot {
      * @param $value    Value to assign to variable
      * @return          True if successful, false if fails
      **/
-     public function __set( $var, $value ) {
+    public function __set( $var, $value ) {
          self::DBGecho( "START:: __set('$var','$value')" );
          if ( $var == 'cURL' || $var == 'credentials' ) {
             return self::ERR_ret( self::ERR_error, "Setting protected variable outside object creation not permitted." );
@@ -190,8 +199,47 @@ class WikiBot {
          } else {
              return self::ERR_ret( self::ERR_warn, "Request to set undefined object variable '$var' for WikiBot class." );
          }
+    }
 
-     }
+    private function get_namespaces_local() {
+        self::DBGecho( "START: get_namespaces_local()" );
+        if (isset($this->bot['ns_local']) == false) {
+            $ns_list    = self::ns_list;
+            array_walk( $ns_list,
+                    function( &$val, $key ) {
+                        $val    = $val['ns'];
+                    } );
+            $this->bot['ns_local']  = $ns_list;
+        }
+        return self::ns_local;
+    }
+
+    private function get_namespaces_canonical() {
+        self::DBGecho( "START: get_namespaces_canonical()" );
+        if (isset($this->bot['ns_canonical']) == false) {
+            $ns_list    = self::ns_list;
+            array_walk( $ns_list,
+                    function( &$val, $key ) {
+                        $val    = $val['canonical'];
+                    } );
+            $this->bot['ns_canonical']  = $ns_list;
+        }
+        return self::ns_canonical;
+    }
+
+    /**
+     *  Function to query API about site's namespaces
+     * @return  Returns an array of namespace data
+     **/
+    private function get_namespaces_DETAIL() {
+        self::DBGecho( "START: get_namespaces_DETAIL()" );
+        if (isset($this->bot['ns_list']) == false) {
+            $q  = '&meta=siteinfo&siprop=namespaces';
+            $r  = query_api( $q );
+            $this->bot['ns_list'] = $r['query']['namespaces'];
+        }
+        return $this->namespaces;
+    }
 
     /**
      * Abstract debug output
@@ -714,7 +762,7 @@ class WikiBot {
      **/
     public function get_category_members_DETAIL( $category ) {
         self::DBGecho( "START: get_category_members_DETAIL('$category')" );
-        $q  = '&list=categorymembers&cmlimit=500&cmtitle='.self::MW_Category
+        $q  = '&list=categorymembers&cmlimit=500&cmtitle='.self::NS_Category
             .urlencode( $category );
         return self::get_a_list( $q, 'categorymembers','categorymembers' );
     }
@@ -754,7 +802,7 @@ class WikiBot {
      **/
     public function get_template_pages( $template ) {
         self::DBGecho( "START: get_templated_pages('$template')" );
-        $q  = 'list=embeddedin&eilimit=500&eititle='.self::MW_Template
+        $q  = 'list=embeddedin&eilimit=500&eititle='.self::NS_Template
             .urlencode( $template );
         return self::get_a_list( $q, 'embeddedin', 'embeddedin' );
     }

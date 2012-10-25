@@ -39,6 +39,9 @@ class WikiBot {
     const DEFAULT_api   = '/w/api.php';
     const API_qry       = '?action=query&format=php';
     const API_parse     = '?action=parse&format=php';
+    const Main_Page     = 'Main Page';
+    const MW_Template   = 'Template:';
+    const MW_Category   = 'Category:';
 
     const ERR_fatal     = 'fatal';
     const ERR_error     = 'error';
@@ -244,7 +247,7 @@ class WikiBot {
      * @param $postdata Optional data to go by POST method
      * @return          False if fails, or unserialized result data
      **/
-    private function query( $query, $postdata = null ) {
+    function query( $query, $postdata = null ) {
         self::DBGecho( "START: query('$query')" );
         $r  = null;
         $wURL   = $this->URL;
@@ -369,6 +372,15 @@ class WikiBot {
          }
          self::query( '?action=logout&format=php' );
      }
+
+    /**
+     *  Function to get, and return, a current edit token
+     * @return  The edit token obtained by pulling the main page
+     **/
+    public function get_edittoken() {
+        self::get_page( self::Main_Page, true );
+        return $this->token;
+    }
 
     /**
      * Page section fetching function
@@ -521,12 +533,12 @@ class WikiBot {
         $this->newpage  = false; // Not writing new page unless say so
         $this->readtime = 0;
 
-        $result = self::query( $q, $post );
-        if ( isset($result['error']) ) {
+        $r = self::query( $q, $post );
+        if ( isset($r['error']) ) {
             return self::ERR_ret( self::ERR_error, "API error, info:"
-                .$result['error']['info']." Result:".$result['error']['code'] );
+                .$r['error']['info']." Result:".$r['error']['code'] );
         }
-        return $result;
+        return $r;
     }
 
     /**
@@ -592,38 +604,69 @@ class WikiBot {
         return array_merge( $toc, $toc_elem );
     }
 
-    /**
-     *  Page links retrieving function
-     * @param $page Page to retrive links from
-     * @param $ns   Namespace of page (defaults to '0', main namespace),
-     *              can be numbers, or names, separated by | (pipe) if more than
-     *              one namespace to be seached.
-     * @return      Array of links from the specified page, or error.
-     **/
-    public function get_links( $page, $ns = '0' ) {
-        self::DBGecho( "START: get_links('$page', '$ns')" );
-        $links  = array();
-        $q  = '&prop=links&titles='
-                .urlencode( $page ).'&plnamespace='
-                .urlencode( $ns ).'&pllimit=500';
-        $r  = self::query_api( $q );
+    function get_a_list( $query, $list_type, $continues, $sub_result = null ) {
+        self::DBGecho( "START: get_a_list('$query','$list_type','$continues','$sub_result')" );
+        $list   = array();
+
+        $r  = self::query_api( $query );
         if ( isset( $r['error'] ) ) {
             return self::ERR_ret( self::ERR_error, "API error, info:"
-                .$result['error']['info']." Result:".$result['error']['code'] );
+                .$r['error']['info']." Result:".$r['error']['code'] );
         }
-        foreach ( $r['query']['pages'] as $list )
-            $links      = array_merge( $links, $list['links'] );
-
+        if ( $sub_result !== null ) {
+            foreach( $r['query'][$sub_result] as $item )
+                $list   = array_merge( $list, $item[$list_type] );
+        } else {
+            $list   = array_merge( $list, $r['query'][$list_type] );
+        }
         while ( isset( $r['query-continue'] ) ) {
-            $r  = self::query_api( $q, $r['query-continue']['links'] );
+            $r  = self::query_api( $query, $r['query-continue'][$continues] );
             if ( isset( $r['error'] ) ) {
                 return self::ERR_ret( self::ERR_error, "API error, info:"
-                    .$result['error']['info']." Result:".$result['error']['code'] );
+                    .$r['error']['info']." Result:".$r['error']['code'] );
             }
-            foreach ( $r['query']['pages'] as $list )
-                $links  = array_merge( $links, $list['links'] );
+            if ( $sub_result !== null ) {
+                foreach( $r['query'][$sub_result] as $item )
+                    $list   = array_merge( $list, $item[$list_type] );
+            } else {
+                $list   = array_merge( $list, $r['query'][$list_type] );
+            }
         }
-        return $links;
+        if ( empty( $list ) ) {
+            return self::ERR_ret( self::ERR_warn, "List is empty" );
+        }
+
+        return $list;
     }
+
+    public function get_page_links( $page, $ns = '0' ) {
+        self::DBGecho( "START: get_page_links('$page','$ns')" );
+        $q  = '&prop=links&pllimit=500&titles='
+            .urlencode( $page ).'&plnamespace='
+            .urlencode( $ns );
+        return self::get_a_list( $q, 'links', 'links', 'pages' );
+    }
+
+    public function get_category_members( $category ) {
+        self::DBGecho( "START: get_category_members('$category')" );
+        $q  = '&list=categorymembers&cmlimit=500&cmtitle='.self::MW_Category
+            .urlencode( $category );
+        return self::get_a_list( $q, 'categorymembers','categorymembers' );
+    }
+
+    public function get_links_here( $page ) {
+        self::DBGecho( "START: get_links_here('$page')" );
+        $q  = '&list=backlinks&bllimit=500&bltitle='
+            .urlencode( $page );
+        return self::get_a_list( $q, 'backlinks', 'backlinks' );
+    }
+
+    public function get_template_pages( $template ) {
+        self::DBGecho( "START: get_templated_pages('$template')" );
+        $q  = 'list=embeddedin&eilimit=500&eititle='.self::MW_Template
+            .urlencode( $template );
+        return self::get_a_list( $q, 'embeddedin', 'embeddedin' );
+    }
+
 }
 ?>

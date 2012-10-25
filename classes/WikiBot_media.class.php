@@ -78,14 +78,14 @@ class WikiBot_media extends WikiBot {
 
     /**
      * Retrieve a media file's actual location.
-     * @param $name The "File:" page on the wiki which the URL of is desired.
-     * @return      The URL pointing directly to the media file
-     *              (Eg http://upload.mediawiki.org/wikipedia/en/1/1/Example.jpg)
+     * @param $media    The "File:" page on the wiki which the URL of is desired.
+     * @return          The URL pointing directly to the media file
+     *                  (Eg http://upload.mediawiki.org/wikipedia/en/1/1/Example.jpg)
      **/
-    public function media_location ( $name ) {
-        parent::DBGecho( "Retrieving location of media '".$name."'" );
+    public function media_location ( $media ) {
+        parent::DBGecho( "START: media_location('$media')" );
         $q  = '?action=query&format=php&prop=imageinfo&titles='
-            .urlencode($name).'&iilimit=1&iiprop=url';
+            .urlencode($media).'&iilimit=1&iiprop=url';
         $r  = parent::query_api( $q );
         foreach ($r['query']['pages'] as $ret ) {
             if (isset($ret['imageinfo'][0]['url'])) {
@@ -106,7 +106,7 @@ class WikiBot_media extends WikiBot {
      * @return          The username of who uploaded the file
      **/
     public function media_uploader( $media ) {
-        parent::DBGecho( "Finding media file's uploader for '".$media."'" );
+        parent::DBGecho( "START: media_uploader('$media')" );
         $q  = '&prop=imageinfo&titles='
             .urlencode( $media ).'&iilimit=1&iiprop=user';
         $r  = parent::query_api( $q );
@@ -129,29 +129,97 @@ class WikiBot_media extends WikiBot {
      * @param $page Name of page to retrieve media for
      * @return      An array containing all used media on the page
      **/
-    public function used_media( $page ) {
-        parent::DBGecho( "Finding all used media on page '".$page."'" );
-        $list   = array();
-        $q  = '&prop=images&titles='
-            .urlencode( $page ).'&imlimit=500';
-        $r  = parent::query_api( $q );
-        if ( isset( $r['error'] ) ) {
-            return parent::ERR_ret( parent::ERR_error, "API error, info:"
-                .$r['error']['info']." Result:".$r['error']['code'] );
-        }
-        foreach ( $r['query']['pages'] as $pg )
-            $list   = array_merge( $list, $pg['images'] );
+    public function get_used_media( $page ) {
+        parent::DBGecho( "START: used_media('$page')" );
+        $q  = '&prop=images&imlimit=5&titles='
+            .urlencode( $page );
+        return parent::get_a_list( $q, 'images', 'images', 'pages' );
+    }
 
-        while ( isset( $r['query-continue'] ) ) {
-            $r  = parent::query_api( $q, $r['query-continue']['images'] );
-            if ( isset( $r['error'] ) ) {
-                return parent::ERR_ret( parent::ERR_error, "API error, info:"
-                    .$r['error']['info']." Result:".$r['error']['code'] );
-            }
-            foreach ( $r['query']['pages'] as $pg )
-                $list   = array_merge( $list, $pg['images'] );
+    /**
+     *  Function to upload locally-held media file.
+     * @param $media    Name of the "File:" being uploaded
+     * @param $file_loc Location of the media file
+     * @param $desc     The description page text
+     * @param $comment  Edit comment for the upload
+     * @return
+     **/
+    public function upload_media( $media, $file_loc, $desc = '', $comment = '' ) {
+        parent::DBGecho( "START: upload_media('$media','$file_loc','$desc','$comment')" );
+        $q      = '?action=upload&format=php';
+        $pars   = array(
+                'filename'          => $media,
+                'comment'           => $comment,
+                'text'              => $desc,
+                'file'              => '@'.$file_loc,
+                'ignorewarnings'    => '1'
+            );
+        if ( $this->token ) {
+            $pars['token']  = $this->token;
+        } else {
+            $pars['token']  = parent::get_edittoken();
         }
-        return $list;
+        // Try to pull the page's ID for later use
+        $pgid   = parent::get_pageid( $media );
+
+        $r  = parent::query( $q, $pars );
+        if ( isset( $r['error'] ) )
+            return parent::ERR_ret( parent::ERR_error, "Media upload failed, info:"
+                .$r['error']['info']." Result:".$r['error']['code'] );
+
+        if ( $pgid !== false ) {
+            // If got page's ID, need to use page_write to update desc
+            $this->newpage  = true;
+            $this->conflict = false;
+            $r  = parent::write_page( $media, $desc, $comment );
+            if ( isset( $r['error'] ) )
+                return parent::ERR_ret( parent::ERR_warn, "Failed updating media description, info:"
+                    .$r['error']['info']." Result:".$r['error']['code'] );
+        }
+        return parent::ERR_ret( parent::ERR_success, "Media '$media' uploaded" );
+    }
+
+    /**
+     *  Function to upload copy of media file specified by URL
+     * @param $media    Name of the "File:" being uploaded
+     * @param $file_url URL pointing to the media file to upload
+     * @param $desc     The description page text
+     * @param $comment  Edit comment for the upload
+     * @return
+     **/
+    public function copy_media( $media, $file_url, $desc = '', $comment = '' ) {
+        parent::DBGecho( "START: copy_media('$media','$file_url','$desc','$comment')" );
+        $q      = '?action=upload&format=php';
+        $pars   = array(
+                'filename'          => $media,
+                'comment'           => $comment,
+                'text'              => $desc,
+                'url'               => $file_url,
+                'ignorewarnings'    => '1'
+            );
+        if ( $this->token ) {
+            $pars['token']  = $this->token;
+        } else {
+            $pars['token']  = parent::get_edittoken();
+        }
+        // Try to pull the page's ID for later use
+        $pgid   = parent::get_pageid( $media );
+
+        $r  = parent::query( $q, $pars );
+        if ( isset( $r['error'] ) )
+            return parent::ERR_ret( parent::ERR_error, "Media copy failed, info:"
+                .$r['error']['info']." Result:".$r['error']['code'] );
+
+        if ( $pgid !== false ) {
+            // If got page's ID, need to use page_write to update desc
+            $this->newpage  = true;
+            $this->conflict = false;
+            $r  = parent::write_page( $media, $desc, $comment );
+            if ( isset( $r['error'] ) )
+                return parent::ERR_ret( parent::ERR_warn, "Failed updating media description, info:"
+                    .$r['error']['info']." Result:".$r['error']['code'] );
+        }
+        return parent::ERR_ret( parent::ERR_success, "Media '$media' uploaded copy" );
     }
 }
 ?>

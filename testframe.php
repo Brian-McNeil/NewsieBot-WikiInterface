@@ -6,12 +6,12 @@
  *      Test framework for bot
  *
  **/
-
+define( 'WikiBot_Name', "WikiBot testing and development framework" );
 define('CLASSPATH', '/home/wikinews/NewsieBot/classes/');
 require_once(CLASSPATH.'WikiBot_media.class.php');
 
 $newsiebot  = new WikiBot_media(mW_WIKI);
-$pg         = "Project:Water cooler/miscellaneous";
+
 
 if (!$newsiebot) {
     echo "Error initializing wikibot";
@@ -20,37 +20,43 @@ if (!$newsiebot) {
     $newsiebot->quiet = false;
     if (!$r)
         die();
-    $newsiebot->runmsg  = "Testing and Development run";
+    $newsiebot->runmsg  = "Logged in";
 
-    // Try and see if this pulls the TOC
-    $toc    = $newsiebot->get_toc( $pg );
-//    echo "Dumping returned data for page TOC:".CRLF;
-//    var_dump($toc);
+    $toc    = $newsiebot->get_toc( "Project:Newsroom" );
+    if ( $toc !== false )
+        $newsiebot->runmsg  = "Successfully retrieved TOC for Newsroom";
+    var_dump( $toc );
 
-    $sectxt = $newsiebot->get_section( $pg, '2', true );
-    echo "Tried pulling 2nd section; content:".CRLF;
-//    var_dump($sectxt);
-
-    $sectxt     .= CRLF."::* Ignore me, I'm just a bot trying something out --~~~~";
-//    $write = $newsiebot->write_section( $pg, $sectxt, '2' );
-//    if ( !$write )  var_dump( $newsiebot );
-
-    $newsiebot->conflict = false; // Not really an edit conflict, but want to write the new section regardless
-    $sectxt     = "Hi, I'm a bot! --~~~~";
-//    $write = $newsiebot->write_section( $pg, $sectxt, 'new', "A bot-generated section" );
-//    if ( !$write )  var_dump( $newsiebot );
-
-    echo "Getting file location".CRLF;
-    $loc    = $newsiebot->media_location( "File:Example.png" );
-//    var_dump( $loc );
-
-//    echo "Getting file location".CRLF;
-//    $loc    = $newsiebot->media_location( "File:Nonexistent-file-requested.png" );
-//    var_dump( $loc );
 
     echo "Testing image retrieval".CRLF;
-    $x  = $newsiebot->used_media( "Main Page" );
-//    var_dump( $x );
+    $x  = $newsiebot->get_used_media( "Main Page" );
+    if ( $x !== false )
+        $newsiebot->runmsg  = "Successfully retrieved used media for Main Page";
+
+    $u  = $newsiebot->upload_media( "File:Static.gif",
+                        "/home/wikinews/NewsieBot/static.gif",
+                        "This test upload can be deleted at-will as image is unused and unneeded",
+                        "Upload edit summary" );
+
+    $list   = $newsiebot->get_category_members( 'Politicians' );
+    if ( $list !== false )
+        $newsiebot->runmsg  = "Retrieved category members for 'Politicians'";
+    var_dump( $list );
+
+    $list   = $newsiebot->get_page_links( 'Main Page' );
+    if ( $list !== false )
+        $newsiebot->runmsg  = "Got pages linked-to from Main Page";
+    var_dump( $list );
+
+    $list   = $newsiebot->get_links_here( 'Wikinews:Newsroom' );
+    if ( $list !== false )
+        $newsiebot->runmsg  = "Got pages linking to 'Wikinews:Newsroom'";
+    var_dump( $list );
+
+    $list   = $newsiebot->get_template_pages( 'United Kingdom' );
+    if ( $list !== false )
+        $newsiebot->runmsg  = "Got pages using template 'United Kingdom'";
+    var_dump( $list );
 
     echo "Calling logout".CRLF;
     $newsiebot->logout();

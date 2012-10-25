@@ -1,18 +1,60 @@
 This is a starting README
 
+Existing, and tested, public functions
+
+WikiBot.class
+
+__construct( $wiki_url, $wiki_api, $ht_user, $ht_pass, $quiet )
+
+request_timeout( $seconds )
+login( $user, $pass )
+logout()
+get_section( $page, $section, $gettoken, $revid )
+get_page( $page, $gettoken, $revid, $section )
+write_section( $title, $content, $section, $summary )
+write_page( $title, $content, $summary, $section )
+get_pageid( $page )
+get_toc( $page, $revid )
+get_page_links( $page, $ns )
+get_category_members ( $category )
+get_links_here( $page )
+get_template_pages( $template )
+
+WikiBot_media.class
+
+__construct( $wiki_url, $wiki_api, $ht_user, $gt_pass, $quiet )
+
+login( $user, $pass )
+media_location( $name )
+media_uploader( $media )
+get_used_media( $page )
+upload_media ( $media, $file_loc, $desc, $comment )
+copy_media ( $media, $file_url, $desc, $comment ) [UNTESTED]
+
+
+
 TO-DO:
+    In WikiBot.class
 
-Complete WikiBot.class.php with basic page functions as-follows:
-A   Page write functions
-B   Additional page fetch/read functions
+get_subpages
+get_transclusions
 
-A.1     Write complete new page. {{done}}
-A.2     Append new section to a page. {{done}}
-A.3     Update a section in a page. {{done}}
-- Must handle edit conflict in A.1 and A.3 {{done}}
-- Must have option to have A.2 fail if trying to add to a nonexistent page {{done}}, untested
+    In WikiBot_media.class
+where_included
+duplicate_images
 
-B.1 Fetch a section from a page.
+    Elsewhere
+
+move_page
+delete_page
+delete_revisions
+undelete_page
+protect_page
+block_user
+unblock_user
+manage_userrights
+get_user_contribs
+email_user
 
 --- Extra classes ---
 

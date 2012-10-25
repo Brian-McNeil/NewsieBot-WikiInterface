@@ -377,6 +377,25 @@ class WikiBot {
     }
 
     /**
+     * @param $page     Name of page checking can edit
+     * @param $user     Name of bot checking can edit; optional, defaults self
+     * @param $content  Content of page checking can edit; optional
+     * @return          True/False - indicator if can edit
+     **/
+    public function edit_permitted( $page, $user = null, $content = null ) {
+        self::DBGecho( "START: edit_permitted('$page','$user','$content' )" );
+        if ( $content === null )
+            $content    = self::get_page( $page );
+        if ( $user === null )
+            $user   = self::user();
+        if (preg_match('/\{\{(nobots|bots\|allow=none|bots\|deny=all|bots\|optout=all|bots\|deny=.*?'.preg_quote($user,'/').'.*?)\}\}/iS',$content))
+            return false;
+
+    // Pass the above, can edit page.
+    return true;
+    }
+
+    /**
      * Page section fetching function
      *  This simply calls the get_page method with parameters reordered
      * @param $page     The title of the required page

@@ -2,11 +2,8 @@ This is a starting README
 
 Existing, and tested, public functions
 
-WikiBot.class
-
+    WikiBot.class
 __construct( $wiki_url, $wiki_api, $ht_user, $ht_pass, $quiet )
-
-request_timeout( $seconds )
 login( $user, $pass )
 logout()
 get_section( $page, $section, $gettoken, $revid )
@@ -20,10 +17,8 @@ get_category_members ( $category )
 get_links_here( $page )
 get_template_pages( $template )
 
-WikiBot_media.class
-
+    WikiBot_media.class [extends WikiBot.class]
 __construct( $wiki_url, $wiki_api, $ht_user, $gt_pass, $quiet )
-
 login( $user, $pass )
 media_location( $name )
 media_uploader( $media )
@@ -32,29 +27,33 @@ upload_media ( $media, $file_loc, $desc, $comment )
 copy_media ( $media, $file_url, $desc, $comment ) [UNTESTED]
 
 
-
 TO-DO:
     In WikiBot.class
 
 get_subpages
 get_transclusions
+move_page
 
     In WikiBot_media.class
-where_included
-duplicate_images
+get_uses_media
+get_duplicate_images
 
     Elsewhere
 
-move_page
-delete_page
-delete_revisions
-undelete_page
-protect_page
-block_user
-unblock_user
-manage_userrights
-get_user_contribs
-email_user
+delete_page( $page )
+delete_revisions( $page, $revision_list )
+undelete_page( $page, $revision_list )
+protect_page( $page, ... )
+user_block( $user, ... )
+user_unblock( $user, ... )
+user_reblock( $user, ... )
+user_manage_rights( $user, ...)
+
+get_user_contribs( $user )
+get_user_del_contribs( $user )
+
+send_email ( $user, $title, $message )
+check_email_enabled( $user )
 
 --- Extra classes ---
 

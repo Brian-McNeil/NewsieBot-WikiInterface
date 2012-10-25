@@ -166,6 +166,10 @@ class WikiBot {
          if ( $var == 'cURL' || $var == 'credentials' ) {
             return self::ERR_ret( self::ERR_error, "Setting protected variable outside object creation not permitted." );
          }
+         if ( $var == 'cURL_request_timeout' ) {
+             // Special case, pass request timeout to cURL
+             return $this->bot['cURL']->req_timeout( $seconds );
+         }
          // Special handling for runmsg; append the message as a new line
          // to be written to the bot's logging page.
          if ( $var == 'runmsg' ) {
@@ -292,16 +296,6 @@ class WikiBot {
             $ed_summ    .= ' of unnamed bot';
         }
         return self::write_page( Bot_LOG, $content, $ed_summ );
-    }
-
-    /**
-     *  Set the HTTP request timeout in the cURL object
-     * @param $seconds  Timeout value in seconds, default 60
-     * @return          Returns value from cURL object's req_timeout method
-     **/
-    function request_timeout( $seconds = 60 ) {
-        self::DBGecho( "START: request_timeout('$seconds')" );
-        return $this->bot['cURL']->req_timeout( $seconds );
     }
 
     /***********************************
@@ -604,6 +598,14 @@ class WikiBot {
         return array_merge( $toc, $toc_elem );
     }
 
+    /**
+     *  Prototype function to retrieve a list of data from the API
+     * @param $query        The query string to pass to the API
+     * @param $list_type    The type of list being requested
+     * @param $continues    The continuation indicator name
+     * @param $sub_result   The sub-array(s) containing results
+     * @return              An array of API results
+     **/
     function get_a_list( $query, $list_type, $continues, $sub_result = null ) {
         self::DBGecho( "START: get_a_list('$query','$list_type','$continues','$sub_result')" );
         $list   = array();
@@ -639,28 +641,98 @@ class WikiBot {
         return $list;
     }
 
+    /**
+     *  Get a list of pages linked-to from the given page
+     * @param $page Page to query links from
+     * @param $ns   Namespace(s) to restrict links to, defaults main
+     * @return      Returns an array page names, or error
+     **/
     public function get_page_links( $page, $ns = '0' ) {
         self::DBGecho( "START: get_page_links('$page','$ns')" );
+        $list   = self::get_page_links_DETAIL( $page, $ns = '0' );
+        if ( is_array( $list ) )
+            array_walk( $list,
+                    function( &$val, $key ) {
+                        if (isset($val['title']))   $val    = $val['title'];
+                    } );
+        return $list;
+    }
+
+    /**
+     *  Get a list of pages linked-to from the given page
+     * @param $page Page to query links from
+     * @param $ns   Namespace(s) to restrict links to, defaults main
+     * @return      Returns an array of API data, or error
+     **/
+    public function get_page_links_DETAIL( $page, $ns = '0' ) {
+        self::DBGecho( "START: get_page_links_DETAIL('$page','$ns')" );
         $q  = '&prop=links&pllimit=500&titles='
             .urlencode( $page ).'&plnamespace='
             .urlencode( $ns );
         return self::get_a_list( $q, 'links', 'links', 'pages' );
     }
 
+    /**
+     *  Get a list of the members of a category
+     * @param $category Name of category to get list of members of
+     * @return          Returns an array of strings, each being a category member
+     **/
     public function get_category_members( $category ) {
-        self::DBGecho( "START: get_category_members('$category')" );
+        self::DBGecho( "START: get_category_members_DETAIL('$category')" );
+        $list   = self::get_category_members_DETAIL( $category );
+        if ( is_array( $list ) )
+            array_walk( $list,
+                    function( &$val, $key ) {
+                        if (isset($val['title']))     $val    = $val['title'];
+                    } );
+        return $list;
+    }
+
+    /**
+     *  Get a list of the members of a category
+     * @param $category Name of category to get list of members of
+     * @return          Returns an array of API results
+     **/
+    public function get_category_members_DETAIL( $category ) {
+        self::DBGecho( "START: get_category_members_DETAIL('$category')" );
         $q  = '&list=categorymembers&cmlimit=500&cmtitle='.self::MW_Category
             .urlencode( $category );
         return self::get_a_list( $q, 'categorymembers','categorymembers' );
     }
 
+    /**
+     *  Get a list of links to a specific page
+     * @param $page Page desire links to established
+     * @return      Returns an array page titles
+     **/
     public function get_links_here( $page ) {
         self::DBGecho( "START: get_links_here('$page')" );
+        $list   = self::get_links_here_DETAIL( $page );
+        if ( is_array($list) )
+            array_walk( $list,
+                    function( &$val, $key ) {
+                        if (isset($val['title']))   $val    = $val['title'];
+                    } );
+        return $list;
+    }
+
+   /**
+     *  Get a list of links to a specific page
+     * @param $page Page desire links to established
+     * @return      Returns an array of API results
+     **/
+    public function get_links_here_DETAIL( $page ) {
+        self::DBGecho( "START: get_links_here_DETAIL('$page')" );
         $q  = '&list=backlinks&bllimit=500&bltitle='
             .urlencode( $page );
         return self::get_a_list( $q, 'backlinks', 'backlinks' );
     }
 
+    /**
+     *  Function to get a list of pages using a template
+     * @param $template Name of template want pages using
+     * @return          List of pages using the template
+     **/
     public function get_template_pages( $template ) {
         self::DBGecho( "START: get_templated_pages('$template')" );
         $q  = 'list=embeddedin&eilimit=500&eititle='.self::MW_Template

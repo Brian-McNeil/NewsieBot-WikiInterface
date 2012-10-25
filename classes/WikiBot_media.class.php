@@ -71,7 +71,7 @@ class WikiBot_media extends WikiBot {
         $r  = parent::login( $user, $pass );
 
         if ( $r !== false ) {
-            $this->request_timeout( 3600 );
+            $this->cURL_request_timeout = 3600;
         }
         return $r;
     }
@@ -124,14 +124,30 @@ class WikiBot_media extends WikiBot {
     }
 
     /**
+     *  Function to get a list of images/media used in a page
+     * @param $page Page to find used media of
+     * @return      List of media titles, or error.
+     **/
+    public function get_used_media( $page ) {
+        parent::DBGecho( "START: used_media('$page')" );
+        $list   = self::get_used_media_DETAIL( $page );
+        if ( is_array( $list ) )
+            array_walk( $list,
+                    function( &$val, $key ) {
+                        if (isset($val['title']))   $val    = $val['title'];
+                    } );
+        return $list;
+    }
+
+    /**
      * Used media function, builds list of images and other media used in
      * a page.
      * @param $page Name of page to retrieve media for
      * @return      An array containing all used media on the page
      **/
-    public function get_used_media( $page ) {
-        parent::DBGecho( "START: used_media('$page')" );
-        $q  = '&prop=images&imlimit=5&titles='
+    public function get_used_media_DETAIL( $page ) {
+        parent::DBGecho( "START: used_media_DETAIL('$page')" );
+        $q  = '&prop=images&imlimit=500&titles='
             .urlencode( $page );
         return parent::get_a_list( $q, 'images', 'images', 'pages' );
     }

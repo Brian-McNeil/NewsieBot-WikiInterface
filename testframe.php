@@ -22,6 +22,7 @@ if (!$newsiebot) {
         die();
     $newsiebot->runmsg  = "Logged in";
 
+/*
     $toc    = $newsiebot->get_toc( "Project:Newsroom" );
     if ( $toc !== false )
         $newsiebot->runmsg  = "Successfully retrieved TOC for Newsroom";
@@ -58,6 +59,12 @@ if (!$newsiebot) {
     if ( $list !== false )
         $newsiebot->runmsg  = "Got pages using template 'United Kingdom'";
     var_dump( $list );
+*/
+
+    $newsiebot->runmsg  = "Trying to pull Main Page revision history";
+
+    $history    = $newsiebot->get_revision_history( 'Main Page' );
+    var_dump( $history );
 
     echo "Calling logout".CRLF;
     $newsiebot->logout();

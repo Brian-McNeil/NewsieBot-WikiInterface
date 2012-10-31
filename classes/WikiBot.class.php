@@ -81,9 +81,11 @@ class WikiBot {
         }
         // Revision ID/Page will be tracked to allow bots to detect
         // edit conflicts.
-        $r['revid']     = '';
-        $r['pagetitle'] = '';
-        $r['rev_time']  = 0;
+        $r['revid']         = '';
+        $r['pagetitle']     = '';
+        $r['rev_time']      = 0;
+        // Limit of items to return in lists (rvlimit, etc)
+        $r['list_limit']    = '500';
         // Default behaviours - These reset on every page write!
         $r['botproc']           = true; // We're a bot
         $r['minor']             = false; // We don't make minor edits
@@ -613,7 +615,7 @@ class WikiBot {
             return $this->revid; // Can avoid API call as page retrieved
 
         $q  = '&prop=revisions&titles='
-            .urlencode( $page ).'&rvlimit=1&rvprop=content';
+            .urlencode( $page ).'&rvlimit=1&rvprop=ids'; //was content, asking ids for short result
         $r  = self::query_api( $q );
         if ( isset( $r['error'] ) ) {
             return self::ERR_ret( self::ERR_error, "API returned error, info:"
@@ -670,7 +672,9 @@ class WikiBot {
      * @param $query        The query string to pass to the API
      * @param $list_type    The type of list being requested
      * @param $continues    The continuation indicator name
-     * @param $sub_result   The sub-array(s) containing results
+     * @param $sub_result   The sub-array(s) containing results. Used where the
+     *                      API query returns an array of arrays with needed data
+     *                      in the inner arrays.
      * @return              An array of API results
      **/
     function get_a_list( $query, $list_type, $continues, $sub_result = null ) {
@@ -733,8 +737,8 @@ class WikiBot {
      **/
     public function get_page_links_DETAIL( $page, $ns = '0' ) {
         self::DBGecho( "START: get_page_links_DETAIL('$page','$ns')" );
-        $q  = '&prop=links&pllimit=500&titles='
-            .urlencode( $page ).'&plnamespace='
+        $q  = '&prop=links&pllimit='.$this->link_limit
+            .'&titles='.urlencode( $page ).'&plnamespace='
             .urlencode( $ns );
         return self::get_a_list( $q, 'links', 'links', 'pages' );
     }
@@ -762,7 +766,8 @@ class WikiBot {
      **/
     public function get_category_members_DETAIL( $category ) {
         self::DBGecho( "START: get_category_members_DETAIL('$category')" );
-        $q  = '&list=categorymembers&cmlimit=500&cmtitle='.self::NS_Category
+        $q  = '&list=categorymembers&cmlimit='.$this->link_limit
+            .'&cmtitle='.self::NS_Category
             .urlencode( $category );
         return self::get_a_list( $q, 'categorymembers','categorymembers' );
     }
@@ -790,7 +795,8 @@ class WikiBot {
      **/
     public function get_links_here_DETAIL( $page ) {
         self::DBGecho( "START: get_links_here_DETAIL('$page')" );
-        $q  = '&list=backlinks&bllimit=500&bltitle='
+        $q  = '&list=backlinks&bllimit='.$this->link_limit
+            .'&bltitle='
             .urlencode( $page );
         return self::get_a_list( $q, 'backlinks', 'backlinks' );
     }
@@ -802,10 +808,22 @@ class WikiBot {
      **/
     public function get_template_pages( $template ) {
         self::DBGecho( "START: get_templated_pages('$template')" );
-        $q  = 'list=embeddedin&eilimit=500&eititle='.self::NS_Template
+        $q  = 'list=embeddedin&eilimit='.$this->link_limit
+            .'&eititle='.self::NS_Template
             .urlencode( $template );
         return self::get_a_list( $q, 'embeddedin', 'embeddedin' );
     }
 
+    /**
+     *  Get a page's entire revision history, with timestamps
+     * @param $page Page wish the edit history for
+     * @return      An array of API results
+     **/
+    public function get_revision_history( $page ) {
+        self::DBGecho( "START: get_revision_history('$page')" );
+        $q  = '&prop=revisions&rvprop=timestamp|ids&rvlimit='.$this->list_limit
+            .'&titles='.urlencode($page);
+        return self::get_a_list( $q, 'revisions', 'revisions', 'pages' );
+    }
 }
 ?>

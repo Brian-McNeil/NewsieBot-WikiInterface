@@ -147,8 +147,8 @@ class WikiBot_media extends WikiBot {
      **/
     public function get_used_media_DETAIL( $page ) {
         parent::DBGecho( "START: used_media_DETAIL('$page')" );
-        $q  = '&prop=images&imlimit=500&titles='
-            .urlencode( $page );
+        $q  = '&prop=images&imlimit='.$this->list_limit
+            .'&titles='.urlencode( $page );
         return parent::get_a_list( $q, 'images', 'images', 'pages' );
     }
 

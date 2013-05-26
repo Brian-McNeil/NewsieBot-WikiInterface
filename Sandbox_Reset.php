@@ -21,13 +21,13 @@ define( 'CLASSPATH', '/home/wikinews/NewsieBot/classes/');
 require_once(CLASSPATH.'WikiBot.class.php');
 
 $newsiebot  = new WikiBot(mW_WIKI);
+$newsiebot->quiet = false; // More-verbose logging
 $sandbox    = 'Wikinews:Sandbox';
 
 if (!$newsiebot) {
     echo "Error initializing NewsieBot".CRLF;
 } else {
     $r = $newsiebot->login(mW_USER, mW_PASS);
-    $newsiebot->quiet = false; // More-verbose logging
     if (!$r) {
         echo "Failed to log in correctly".CRLF;
         return false;
